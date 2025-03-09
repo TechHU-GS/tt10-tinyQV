@@ -1,4 +1,4 @@
-read_sdc $::env(SCRIPTS_DIR)/base.sdc
+read_sdc $::env(FALLBACK_SDC_FILE)
 
 # Add duty cycle uncertainty - due to the high capacitance of the TT mux 
 # we're pretty uncertain about the duty cycle
