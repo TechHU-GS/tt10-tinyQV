@@ -88,10 +88,15 @@ module tt_um_MichaelBell_tinyQV (
 
 `ifdef SIM
     wire       game_clk   = ui_in[5];
-`else
+`elsif SCL_sky130_fd_sc_hd
     (* keep *) wire game_clk;
-/* verilator lint_off PINMISSING */    
+/* verilator lint_off PINMISSING */
     (* keep_hierarchy *) sky130_fd_sc_hd__clkbuf_8 game_clk_buf(.X(game_clk), .A(ui_in[5]));
+/* verilator lint_on PINMISSING */
+`else    
+    (* keep *) wire game_clk;
+/* verilator lint_off PINMISSING */
+    (* keep_hierarchy *) sg13g2_buf_8 game_clk_buf(.X(game_clk), .A(ui_in[5]));
 /* verilator lint_on PINMISSING */
 `endif
 
