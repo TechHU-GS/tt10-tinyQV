@@ -34,15 +34,14 @@
   "USE_LIGHTER": 0,
 
   "//": "SDC Customizations",
-  "//PNR_SDC_FILE": "dir::base.sdc",
-  "//SIGNOFF_SDC_FILE": "dir::base.sdc",
+  "FALLBACK_SDC_FILE": "dir::base.sdc",
 
   "//": "Routing tweaks",
   "DESIGN_REPAIR_MAX_SLEW_PCT": 25,
   "DESIGN_REPAIR_REMOVE_BUFFERS": 1,
-  "RUN_HEURISTIC_DIODE_INSERTION": 1,
-  "RUN_ANTENNA_REPAIR": 1,
-  "HEURISTIC_ANTENNA_THRESHOLD": 200,
+  "//RUN_HEURISTIC_DIODE_INSERTION": 1,
+  "//RUN_ANTENNA_REPAIR": 1,
+  "//HEURISTIC_ANTENNA_THRESHOLD": 200,
 
   "//": "If you need a custom clock configuration, read the following documentation first:",
   "//": "https://tinytapeout.com/faq/#how-can-i-map-an-additional-external-clock-to-one-of-the-gpios",
@@ -57,6 +56,9 @@
   "//": "Save some time",
   "RUN_KLAYOUT_XOR": 0,
   "RUN_KLAYOUT_DRC": 0,
+
+  "//": "Exclude standard cells with issues",
+  "EXTRA_EXCLUDED_CELLS": ["sg13g2_sdfbbp_1"],
 
   "//": "Don't put clock buffers on the outputs",
   "DESIGN_REPAIR_BUFFER_OUTPUT_PORTS": 0,
@@ -82,7 +84,7 @@
 
   "//": "Don't use power rings or met5 layer",
   "FP_PDN_MULTILAYER": 0,
-  "RT_MAX_LAYER": "met4",
+  "RT_MAX_LAYER": "Metal5",
 
   "//": "MAGIC_DEF_LABELS may cause issues with LVS",
   "MAGIC_DEF_LABELS": 0,
