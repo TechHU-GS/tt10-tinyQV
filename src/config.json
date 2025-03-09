@@ -34,8 +34,8 @@
   "USE_LIGHTER": 0,
 
   "//": "SDC Customizations",
-  "PNR_SDC_FILE": "dir::base.sdc",
-  "SIGNOFF_SDC_FILE": "dir::base.sdc",
+  "//PNR_SDC_FILE": "dir::base.sdc",
+  "//SIGNOFF_SDC_FILE": "dir::base.sdc",
 
   "//": "Routing tweaks",
   "DESIGN_REPAIR_MAX_SLEW_PCT": 25,
