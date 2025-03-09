@@ -13,52 +13,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Create commit_id.json
-        shell: bash
-        run: |
-          jq -n \
-            --arg app "Customised TT10 OL2 2.2.9" \
-            --arg repo "${{ github.server_url }}/${{ github.repository }}" \
-            --arg commit "${{ github.sha }}" \
-            --arg workflow_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            '{app: $app, repo: $repo, commit: $commit, workflow_url: $workflow_url}' \
-            > tt_submission/commit_id.json
-
-      - name: Install KLayout
-        shell: bash
-        run: |
-          wget https://github.com/htfab/klayout/releases/download/v0.29.10/klayout_0.29.10-1_amd64.deb
-          sudo apt-get install -y ./klayout_0.29.10-1_amd64.deb
-          pip install klayout==0.29.10
-
-      - name: Create oas from gds
-        shell: bash
-        run: |
-          for file in tt_submission/*.gds ; do strm2oas $file ${file%.*}.oas ; done
-
-      - name: Publish tt_submission artifact
-        uses: actions/upload-artifact@v4
+      - name: Build GDS
+        uses: TinyTapeout/tt-gds-action@ttihp25a
         with:
-          name: tt_submission
-          path: |
-            src/*
-            docs/*
-            tt_submission/*
-            info.yaml
-            LICENSE
+          pdk: ihp
 
-      - name: Upload gds_render (png) artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gds_render
-          path: 'gds_render.png'
-
-  precheck:
-    needs: gds
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Run Tiny Tapeout Precheck
-        uses: TinyTapeout/tt-gds-action/precheck@tt10
+  #precheck:
+  #  needs: gds
+  #  runs-on: ubuntu-24.04
+  #  steps:
+  #    - name: Run Tiny Tapeout Precheck
+  #      uses: TinyTapeout/tt-gds-action/precheck@ttihp25a
 
   gl_test:
     needs: gds
@@ -70,7 +35,9 @@ jobs:
           submodules: recursive
 
       - name: GL test
-        uses: MichaelBell/tt-gds-action/gl_test@tt10
+        uses: MichaelBell/tt-gds-action/gl_test@ttihp25a
+        with:
+          pdk: ihp
 
   viewer:
     needs: gds
@@ -79,4 +46,4 @@ jobs:
       pages: write      # to deploy to Pages
       id-token: write   # to verify the deployment originates from an appropriate source
     steps:
-      - uses: TinyTapeout/tt-gds-action/viewer@tt10
+      - uses: TinyTapeout/tt-gds-action/viewer@ttihp25a

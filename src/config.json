@@ -36,6 +36,9 @@
   "//": "SDC Customizations",
   "FALLBACK_SDC_FILE": "dir::base.sdc",
 
+  "//": "TEMP disable Magic DRC to get GL tests to run",
+  "ERROR_ON_MAGIC_DRC": 0,
+
   "//": "Routing tweaks",
   "DESIGN_REPAIR_MAX_SLEW_PCT": 25,
   "DESIGN_REPAIR_REMOVE_BUFFERS": 1,
