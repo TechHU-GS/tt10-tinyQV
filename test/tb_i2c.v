@@ -360,6 +360,67 @@ module tb_i2c;
 
         repeat(200) @(posedge clk);
 
+        // --- Test 9: Multi-byte read (3 bytes from 0x44) ---
+        // Verifies Bug 3 fix: standalone READ without START must not be dropped.
+        // Slave returns 0xA5, 0xA6, 0xA7 (auto-incrementing)
+        $display("--- Test 9: Multi-byte read (3 bytes) ---");
+
+        // Reset slave_tx_data to known value
+        // (slave model auto-increments after each byte sent)
+
+        // Byte 1: START + READ (no STOP)
+        mmio_write({19'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b1, 1'b0, 7'h44});
+        repeat(5) @(posedge clk);
+        wait_not_busy;
+        check("multi-read: byte 1 no NACK", data_out[8] == 1'b0);
+
+        // Wait for rx_valid
+        repeat(20) @(posedge clk);
+        check("multi-read: byte 1 rx_valid", data_out[10] == 1'b1);
+        // Capture byte 1 value
+        begin : multi_read_block
+            reg [7:0] byte1, byte2, byte3;
+            byte1 = data_out[7:0];
+            $display("  byte1 = 0x%02X", byte1);
+
+            // Consume byte 1
+            mmio_read;
+            repeat(5) @(posedge clk);
+            check("multi-read: byte 1 consumed", data_out[10] == 1'b0);
+
+            // Byte 2: READ only (no START, no STOP)
+            mmio_write({19'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b0, 7'h00});
+            repeat(5) @(posedge clk);
+            wait_not_busy;
+
+            repeat(20) @(posedge clk);
+            check("multi-read: byte 2 rx_valid", data_out[10] == 1'b1);
+            byte2 = data_out[7:0];
+            $display("  byte2 = 0x%02X", byte2);
+            check("multi-read: byte 2 = byte1+1", byte2 == byte1 + 1);
+
+            // Consume byte 2
+            mmio_read;
+            repeat(5) @(posedge clk);
+
+            // Byte 3: READ + STOP (last byte, master sends NACK)
+            mmio_write({19'b0, 1'b1, 1'b0, 1'b0, 1'b1, 1'b0, 1'b0, 7'h00});
+            repeat(5) @(posedge clk);
+            wait_not_busy;
+
+            repeat(20) @(posedge clk);
+            check("multi-read: byte 3 rx_valid", data_out[10] == 1'b1);
+            byte3 = data_out[7:0];
+            $display("  byte3 = 0x%02X", byte3);
+            check("multi-read: byte 3 = byte2+1", byte3 == byte2 + 1);
+
+            // Consume byte 3
+            mmio_read;
+            repeat(5) @(posedge clk);
+        end
+
+        repeat(200) @(posedge clk);
+
         // --- Test 8: NACK on wrong address ---
         $display("--- Test 8: NACK on wrong address ---");
 

@@ -219,7 +219,7 @@ module tt_um_MichaelBell_tinyQV (
         ui_in_reg <= {1'b0, ui_in[0]};  // [0]=DIO1 edge, [1]=unused
     end
     wire [3:0] interrupt_req = {
-        !uart_tx_busy,     // [3] IRQ19: UART TX ready
+        1'b0,              // [3] IRQ19: reserved (TX ready is level — use polling)
         uart_rx_valid,     // [2] IRQ18: UART RX data
         timer_irq,         // [1] IRQ17: countdown expired
         ui_in_reg[0]       // [0] IRQ16: SX1268 DIO1

@@ -70,7 +70,7 @@ module i2c_peripheral (
     //   has_read  = read byte requested
     //   has_stop  = STOP condition requested (standalone or with last byte)
     wire is_start_write = data_wr && mmio_cmd_start && (mmio_cmd_write || mmio_cmd_write_m);
-    wire is_start_read  = data_wr && mmio_cmd_start && mmio_cmd_read;
+    wire is_read_cmd    = data_wr && mmio_cmd_read;  // any READ (with or without START)
     wire is_data_write  = data_wr && !mmio_cmd_start && (mmio_cmd_write || mmio_cmd_write_m);
     wire is_stop_only   = data_wr && mmio_cmd_stop && !mmio_cmd_start &&
                           !mmio_cmd_write && !mmio_cmd_write_m && !mmio_cmd_read;
@@ -89,7 +89,7 @@ module i2c_peripheral (
 
     // ================================================================
     // Command channel — AXI Stream latch
-    // Only sends cmds for: START+WRITE, START+READ, STOP-only
+    // Sends cmds for: START+WRITE, any READ, STOP-only.
     // Data-only writes go directly to TX data channel.
     // ================================================================
     wire s_axis_cmd_ready;
@@ -103,8 +103,8 @@ module i2c_peripheral (
     reg        cmd_write_m_reg;
     reg        cmd_stop_reg;
 
-    // Need a cmd for: START+WRITE, START+READ, STOP-only
-    wire needs_cmd = is_start_write || is_start_read || is_stop_only;
+    // Need a cmd for: START+WRITE, any READ (with/without START), STOP-only
+    wire needs_cmd = is_start_write || is_read_cmd || is_stop_only;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -126,9 +126,11 @@ module i2c_peripheral (
                 cmd_write_reg   <= 1'b0;
                 cmd_write_m_reg <= 1'b1;  // write_multiple for streaming
                 cmd_stop_reg    <= 1'b1;  // STOP when tlast=1
-            end else if (is_start_read) begin
-                cmd_addr_reg    <= mmio_addr;
-                cmd_start_reg   <= 1'b1;
+            end else if (is_read_cmd) begin
+                // Any READ: START+READ for first byte, standalone READ for
+                // subsequent bytes, READ+STOP for last byte — all from firmware bits.
+                cmd_addr_reg    <= mmio_cmd_start ? mmio_addr : addr_latch;
+                cmd_start_reg   <= mmio_cmd_start;
                 cmd_read_reg    <= 1'b1;
                 cmd_write_reg   <= 1'b0;
                 cmd_write_m_reg <= 1'b0;
