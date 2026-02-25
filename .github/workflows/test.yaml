@@ -33,6 +33,26 @@ jobs:
           cat wdt_result.txt
           grep -q "ALL TESTS PASSED" wdt_result.txt
 
+      - name: Run I2C unit test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_i2c.vvp \
+            tb_i2c.v ../src/i2c_master.v ../src/i2c_peripheral.v
+          timeout 120 vvp tb_i2c.vvp > i2c_result.txt 2>&1 || true
+          cat i2c_result.txt
+          grep -q "ALL TESTS PASSED" i2c_result.txt
+
+      - name: Run Seal unit test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_seal.vvp \
+            tb_seal.v ../src/seal_register.v ../src/crc16_engine.v
+          vvp tb_seal.vvp > seal_result.txt 2>&1 || true
+          cat seal_result.txt
+          grep -q "ALL TESTS PASSED" seal_result.txt
+
       - name: Run P0-A integration test
         shell: bash
         run: |
@@ -55,6 +75,50 @@ jobs:
           cat integration_result.txt
           grep -q "ALL TESTS PASSED" integration_result.txt
 
+      - name: Run P0-B integration test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_integration_b.vvp \
+            tb_integration_b.v qspi_flash_model.v qspi_psram_model.v i2c_slave_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 600 vvp tb_integration_b.vvp > integration_b_result.txt 2>&1 || true
+          cat integration_b_result.txt
+          grep -q "ALL TESTS PASSED" integration_b_result.txt
+
+      - name: Run read-clear regression test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_read_clear_regression.vvp \
+            tb_read_clear_regression.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_read_clear_regression.vvp > regression_result.txt 2>&1 || true
+          cat regression_result.txt
+          grep -q "ALL TESTS PASSED" regression_result.txt
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,4 +126,3 @@ jobs:
           name: test-results
           path: |
             test/*_result.txt
-            test/*.vcd
