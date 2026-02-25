@@ -83,6 +83,40 @@ module tt_um_MichaelBell_tinyQV (
 
     // ================================================================
     // TinyQV CPU data bus signals
+    //
+    // !! DESIGN RULE: read_complete vs data_rd (read_n) !!
+    //
+    // TinyQV is a 4-bit serial CPU. A 32-bit MMIO read is executed as
+    // 8 consecutive nibble transfers: read_n stays != 2'b11 for all 8
+    // clock cycles while the CPU shifts in data 4 bits at a time.
+    //
+    // read_complete pulses HIGH for exactly 1 clock at the END of the
+    // 8-cycle read sequence (when the full 32-bit value has been latched
+    // into the CPU register file).
+    //
+    // RULE A — Read-side-effects must use read_complete, NOT read_n:
+    //   Any action triggered by a read that has side effects — clearing
+    //   a flag, advancing a FIFO pointer, popping a buffer — MUST be
+    //   gated by read_complete (single pulse). Using (read_n != 2'b11)
+    //   fires on the FIRST clock of the read, which clears state before
+    //   the CPU has finished sampling all nibbles. Status bits in upper
+    //   nibbles will read as stale/zero.
+    //
+    // RULE B — Read data must remain stable during multi-cycle read:
+    //   The combinational data_from_read mux feeds the CPU for 8 cycles.
+    //   If a read-side-effect clears a status bit (e.g., rx_has_data)
+    //   on cycle 1, the CPU reads 0 for that bit on cycles 2-7. The
+    //   peripheral MUST hold data_out stable until read_complete fires.
+    //
+    // Correct pattern (uart_rx, i2c_data, seal_data):
+    //   wire consume = (connect_peripheral == PERI_XXX) && read_complete;
+    //
+    // Wrong pattern (causes bit-serial read corruption):
+    //   wire consume = (read_n != 2'b11) && (connect_peripheral == PERI_XXX);
+    //
+    // See: uart_rx_read (line 531), i2c_data_rd (line 450), seal_data_rd (line 415)
+    // Bug history: I2C RX_VALID (bit[10]) read as 0 because rx_has_data was
+    // cleared on cycle 1 of an 8-cycle read. Fixed 2026-02-26.
     // ================================================================
     wire [27:0] addr;
     wire  [1:0] write_n;
@@ -411,7 +445,8 @@ module tt_um_MichaelBell_tinyQV (
     // Seal Register + Monotonic Counter
     // ================================================================
     wire        seal_data_wr = (write_n != 2'b11) && (connect_peripheral == PERI_SEAL_DATA);
-    wire        seal_data_rd = (read_n  != 2'b11) && (connect_peripheral == PERI_SEAL_DATA);
+    // Use read_complete — same TinyQV bit-serial issue as I2C data_rd
+    wire        seal_data_rd = (connect_peripheral == PERI_SEAL_DATA) && read_complete;
     wire        seal_ctrl_wr = (write_n != 2'b11) && (connect_peripheral == PERI_SEAL_CTRL);
     wire [31:0] seal_data_out;
     wire [31:0] seal_ctrl_out;
@@ -443,7 +478,10 @@ module tt_um_MichaelBell_tinyQV (
     // I2C Master (Forencich) + MMIO Bridge
     // ================================================================
     wire        i2c_data_wr = (write_n != 2'b11) && (connect_peripheral == PERI_I2C_DATA);
-    wire        i2c_data_rd = (read_n  != 2'b11) && (connect_peripheral == PERI_I2C_DATA);
+    // Use read_complete (not data_rd) to consume RX data — TinyQV is bit-serial,
+    // data_rd stays active for 8 clocks but rx_has_data clears on first clock,
+    // causing the CPU to read stale status bits on later nibbles.
+    wire        i2c_data_rd = (connect_peripheral == PERI_I2C_DATA) && read_complete;
     wire        i2c_config_wr = (write_n != 2'b11) && (connect_peripheral == PERI_I2C_CONFIG);
     wire [31:0] i2c_data_out;
     wire [31:0] i2c_config_out;

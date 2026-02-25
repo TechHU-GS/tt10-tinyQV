@@ -192,6 +192,12 @@ module i2c_peripheral (
     // AXI-stream handshake: transfer when tvalid && tready on same cycle.
     // NOTE: reading I2C_DATA consumes the RX byte (rx_has_data cleared).
     //       Firmware must save the value before the next read.
+    //
+    // IMPORTANT: data_rd MUST be a single-cycle pulse (read_complete),
+    // NOT the multi-cycle (read_n != 2'b11) signal. TinyQV is a 4-bit
+    // serial CPU — read_n stays active for 8 clocks. If rx_has_data is
+    // cleared on cycle 1, bit[10] (RX_VALID) reads as 0 on cycle 3
+    // when the CPU samples nibble 2. See project.v RULE A/B.
     // ================================================================
     wire [7:0] rx_tdata;
     wire       rx_tvalid;
@@ -280,5 +286,18 @@ module i2c_peripheral (
     //   in write_multiple mode (i2c_busy stays high during entire transaction)
     assign data_out   = {20'b0, tx_pending, rx_has_data, i2c_busy, missed_ack_latch, rx_latch};
     assign config_out = {16'b0, prescale_reg};
+
+    // Debug: trace RX events
+    always @(posedge clk) begin
+        if (rx_fire)
+            $display("[I2C_BRIDGE] rx_fire: data=0x%02X, rx_has_data=%b @ %0t", rx_tdata, rx_has_data, $time);
+        if (data_rd)
+            $display("[I2C_BRIDGE] data_rd: rx_has_data=%b, data_out=0x%08X @ %0t", rx_has_data, data_out, $time);
+        if (data_wr)
+            $display("[I2C_BRIDGE] MMIO write: data_in=0x%08X @ %0t", data_in, $time);
+        if (cmd_accepted)
+            $display("[I2C_BRIDGE] cmd accepted: start=%b read=%b write=%b wm=%b stop=%b addr=0x%02X @ %0t",
+                     cmd_start_reg, cmd_read_reg, cmd_write_reg, cmd_write_m_reg, cmd_stop_reg, cmd_addr_reg, $time);
+    end
 
 endmodule

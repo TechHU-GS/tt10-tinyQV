@@ -80,6 +80,11 @@ module seal_register (
 
     // ================================================================
     // 3x read serialization
+    // IMPORTANT: data_rd MUST be a single-cycle pulse (read_complete),
+    // NOT the multi-cycle read_n signal. TinyQV reads 32 bits in 8
+    // clock cycles; if data_rd fires on cycle 1, read_seq advances
+    // prematurely and the CPU gets wrong data on nibbles 2-7.
+    // See project.v RULE A/B.
     // ================================================================
     reg [1:0] read_seq;
 
