@@ -188,11 +188,13 @@ module i2c_peripheral (
     end
 
     // ================================================================
-    // RX Data — latch from master, clear on MMIO read
+    // RX Data — 1-deep skid buffer, combinational ready
+    // AXI-stream handshake: transfer when tvalid && tready on same cycle.
     // ================================================================
     wire [7:0] rx_tdata;
     wire       rx_tvalid;
-    reg        rx_tready;
+    wire       rx_tready = !rx_has_data;  // ready when buffer empty
+    wire       rx_fire   = rx_tvalid && rx_tready;
     reg [7:0]  rx_latch;
     reg        rx_has_data;
 
@@ -200,19 +202,14 @@ module i2c_peripheral (
         if (rst) begin
             rx_latch    <= 8'd0;
             rx_has_data <= 1'b0;
-            rx_tready   <= 1'b0;
         end else begin
-            rx_tready <= 1'b0;
-            // Latch new RX data when available
-            if (rx_tvalid && !rx_has_data) begin
+            if (rx_fire) begin
                 rx_latch    <= rx_tdata;
                 rx_has_data <= 1'b1;
-                rx_tready   <= 1'b1;
             end
-            // Clear on read of I2C_DATA
-            if (data_rd && rx_has_data) begin
+            // Clear on MMIO read of I2C_DATA
+            if (data_rd && rx_has_data)
                 rx_has_data <= 1'b0;
-            end
         end
     end
 
