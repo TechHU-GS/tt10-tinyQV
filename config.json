@@ -27,10 +27,6 @@
     "CLOCK_PORT": "clk",
     "CLOCK_PERIOD": 40.0,
 
-    "FP_CORE_UTIL": 65,
-    "FP_SIZING": "relative",
-    "FP_ASPECT_RATIO": 1.0,
-
     "PNR_SDC_FILE": "dir::constraints/pnr.sdc",
     "SIGNOFF_SDC_FILE": "dir::constraints/signoff.sdc",
 
