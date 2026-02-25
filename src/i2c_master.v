@@ -26,6 +26,10 @@ THE SOFTWARE.
 
 `timescale 1ns / 1ps
 
+/* verilator lint_off PROCASSINIT */
+/* verilator lint_off CASEINCOMPLETE */
+/* verilator lint_off UNUSEDSIGNAL */
+
 /*
  * I2C master
  */
