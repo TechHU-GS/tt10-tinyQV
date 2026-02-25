@@ -41,6 +41,8 @@ jobs:
             tb_integration.v qspi_flash_model.v \
             ../src/project.v ../src/latch_mem.v \
             ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
             ../src/watchdog.v ../src/rtc_counter.v \
             ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
             ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
