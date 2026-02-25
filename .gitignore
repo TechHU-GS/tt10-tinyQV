@@ -17,4 +17,5 @@ test/gate_level_netlist.v
 *.bin
 *.log
 *.uf2
-gds_render_preview*output/
+gds_render_preview*
+output/
