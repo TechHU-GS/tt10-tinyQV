@@ -190,6 +190,8 @@ module i2c_peripheral (
     // ================================================================
     // RX Data — 1-deep skid buffer, combinational ready
     // AXI-stream handshake: transfer when tvalid && tready on same cycle.
+    // NOTE: reading I2C_DATA consumes the RX byte (rx_has_data cleared).
+    //       Firmware must save the value before the next read.
     // ================================================================
     wire [7:0] rx_tdata;
     wire       rx_tvalid;

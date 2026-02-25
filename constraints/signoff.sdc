@@ -1,6 +1,10 @@
 # ============================================================
 # LoRa Edge SoC — Signoff SDC (25 MHz)
 # ============================================================
+# Strategy: Signoff constraints are TIGHTER than PNR
+# (max=12ns vs PNR max=15ns) to verify board-level I/O timing.
+# Hold (min=2.0ns) is same as PNR to keep hold analysis consistent.
+# ============================================================
 
 create_clock -name clk -period 40.0 [get_ports clk]
 

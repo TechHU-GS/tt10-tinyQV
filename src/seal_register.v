@@ -7,6 +7,10 @@
 //   3. Write SEAL_CTRL = {sensor_id[7:0], commit=1, crc_reset=0}
 //   → Hardware: mono_count++, CRC16(sensor_id + value + mono_count), latch record
 //
+// Priority: commit (bit[1]) takes precedence over standalone crc_reset (bit[0]).
+// If both bits are set, commit executes (which always inits CRC internally).
+// Standalone crc_reset only fires when commit=0.
+//
 // Read flow (3x SEAL_DATA reads):
 //   Read 0: value[31:0]
 //   Read 1: {session_id[7:0], mono_count[23:0]}

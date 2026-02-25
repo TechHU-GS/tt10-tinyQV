@@ -14,6 +14,12 @@
 //   3. Wait 8 cycles (busy=1)
 //   4. After all bytes, read crc_out
 //   5. Verification: feed data+CRC bytes, result should be 0x0000
+//
+// Interface timing rules:
+//   - init takes priority over data_valid (if both asserted, only init executes)
+//   - data_valid while busy is silently ignored (caller must poll busy=0 first)
+//   - busy goes high on the SAME cycle as data_valid (combinational from bit_cnt)
+//   - crc_out is valid when busy=0 (stable between bytes)
 // ============================================================================
 
 module crc16_engine (

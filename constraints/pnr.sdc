@@ -1,6 +1,12 @@
 # ============================================================
 # LoRa Edge SoC — PNR SDC (25 MHz)
 # ============================================================
+# Strategy: PNR constraints are intentionally LOOSER than signoff
+# (max=15ns vs signoff max=12ns) to give the placer more freedom
+# for area optimization, while signoff tightens to ensure real
+# board-level I/O timing. Hold (min) is SAME in both (2.0ns)
+# to ensure sufficient hold margin is built in during PNR.
+# ============================================================
 
 # Primary clock: 25 MHz (40ns period)
 create_clock -name clk -period 40.0 [get_ports clk]

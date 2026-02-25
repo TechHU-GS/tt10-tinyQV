@@ -255,6 +255,180 @@ module tb_crc16;
         check1(1'b0, bus_data_out[16], "read[16]=busy=0");
         check16(16'h0000, bus_data_out[31:17], "read[31:17]=0");
 
+        // ---- Test 12: Reset mid-busy clears state ----
+        $display("--- Test 12: Reset mid-busy ---");
+        do_init;
+        // Start a byte
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0055;
+        bus_wr_en   <= 1'b1;
+        @(posedge clk);
+        bus_wr_en   <= 1'b0;
+        // Engine should be busy now
+        @(posedge clk);
+        check1(1'b1, read_busy(0), "busy during processing");
+        // Init while busy — should abort and reset to 0xFFFF
+        bus_write(32'h0000_0100);  // init
+        @(posedge clk);
+        check16(16'hFFFF, read_crc(0), "init mid-busy resets to 0xFFFF");
+        check1(1'b0, read_busy(0), "not busy after init mid-busy");
+
+        // ---- Test 13: 0-byte CRC = seed (0xFFFF) ----
+        $display("--- Test 13: 0-byte CRC = seed ---");
+        do_init;
+        // Don't feed any bytes, just read
+        check16(16'hFFFF, read_crc(0), "0-byte CRC = 0xFFFF (seed)");
+
+        // ---- Test 14: Back-to-back bytes (no gap, busy rejection) ----
+        // Rapid writes: only the first should be processed per batch
+        $display("--- Test 14: Burst writes ---");
+        do_init;
+        // Write 3 bytes in rapid succession (no wait for busy=0)
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0031; bus_wr_en <= 1'b1;  // '1'
+        @(posedge clk);
+        bus_wr_en <= 1'b0;
+        // Immediately write next (engine busy, should be rejected)
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0032; bus_wr_en <= 1'b1;  // '2'
+        @(posedge clk);
+        bus_wr_en <= 1'b0;
+        // And another
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0033; bus_wr_en <= 1'b1;  // '3'
+        @(posedge clk);
+        bus_wr_en <= 1'b0;
+        // Wait for processing
+        repeat(15) @(posedge clk);
+        // Only first byte '1' (0x31) should have been accepted
+        // CRC of single '1' = CRC16(0x31)
+        // If all 3 got in, CRC would be CRC16("123") = different value
+        begin : burst_block
+            reg [15:0] crc_single_1;
+            crc_single_1 = read_crc(0);
+            // Now compute proper CRC of just '1'
+            do_init;
+            feed_byte(8'h31);  // '1' properly with wait
+            check16(crc_single_1, read_crc(0), "burst: only first byte accepted");
+        end
+
+        // ---- Test 15: Engine processes exactly 8 cycles per byte ----
+        $display("--- Test 15: 8-cycle processing ---");
+        do_init;
+        // Feed byte through peripheral bridge
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0041; bus_wr_en <= 1'b1;  // 'A'
+        @(posedge clk);
+        bus_wr_en <= 1'b0;
+        // Wait 1 cycle for bit_cnt to load (combinational busy follows)
+        @(posedge clk);
+        // Now count how many clocks busy stays high
+        begin : timing_block
+            integer busy_count;
+            busy_count = 0;
+            while (read_busy(0)) begin
+                busy_count = busy_count + 1;
+                @(posedge clk);
+                if (busy_count > 20) begin
+                    $display("[FAIL] busy stuck >20 cycles");
+                    fail_count = fail_count + 1;
+                    disable timing_block;
+                end
+            end
+            // busy=1 from data_valid→bit_cnt=8, then 8 cycles processing
+            if (busy_count >= 7 && busy_count <= 9) begin
+                $display("[PASS] busy for %0d cycles (expected ~8)", busy_count);
+                pass_count = pass_count + 1;
+            end else begin
+                $display("[FAIL] busy for %0d cycles (expected ~8)", busy_count);
+                fail_count = fail_count + 1;
+            end
+        end
+
+        // ---- Test 16: Hardware reset mid-busy ----
+        $display("--- Test 16: rst_n mid-busy ---");
+        do_init;
+        @(posedge clk);
+        bus_data_in <= 32'h0000_00AA;
+        bus_wr_en   <= 1'b1;
+        @(posedge clk);
+        bus_wr_en   <= 1'b0;
+        @(posedge clk);
+        // Assert hardware reset during processing
+        rst_n = 0;
+        repeat(3) @(posedge clk);
+        rst_n = 1;
+        repeat(3) @(posedge clk);
+        check16(16'hFFFF, read_crc(0), "hw reset mid-busy: CRC=0xFFFF");
+        check1(1'b0, read_busy(0), "hw reset mid-busy: not busy");
+
+        // ---- Test 17: B6 — init while busy aborts calculation ----
+        $display("--- Test 17: B6 init-while-busy ---");
+        do_init;
+        feed_byte(8'h31); feed_byte(8'h32); feed_byte(8'h33);
+        // Now start feeding byte 4 but init before it completes
+        @(posedge clk);
+        bus_data_in <= 32'h0000_0034;  // '4'
+        bus_wr_en   <= 1'b1;
+        @(posedge clk);
+        bus_wr_en   <= 1'b0;
+        // Engine is busy processing '4'
+        @(posedge clk);
+        check1(1'b1, read_busy(0), "B6: busy during byte 4");
+        // Init while busy — should abort and reset to 0xFFFF
+        bus_write(32'h0000_0100);  // init
+        @(posedge clk);
+        check16(16'hFFFF, read_crc(0), "B6: init mid-busy resets CRC");
+        check1(1'b0, read_busy(0), "B6: not busy after init");
+        // Now feed fresh data — should compute from 0xFFFF
+        feed_byte(8'h31); feed_byte(8'h32); feed_byte(8'h33);
+        feed_byte(8'h34); feed_byte(8'h35); feed_byte(8'h36);
+        feed_byte(8'h37); feed_byte(8'h38); feed_byte(8'h39);
+        check16(16'h4B37, read_crc(0), "B6: correct CRC after init-mid-busy");
+
+        // ---- Test 18: D3 — Reset value is 0xFFFF ----
+        $display("--- Test 18: D3 initial value ---");
+        rst_n = 0; repeat(5) @(posedge clk); rst_n = 1; repeat(3) @(posedge clk);
+        check16(16'hFFFF, read_crc(0), "D3: CRC=0xFFFF after hw reset");
+        check1(1'b0, read_busy(0), "D3: not busy after hw reset");
+
+        // ---- Test 19: Write reserved bits ----
+        $display("--- Test 19: Write reserved bits ---");
+        do_init;
+        // Write with bits [31:9] set — should only use [8:0]
+        bus_write(32'hFFFF_FF00);  // bit[8]=1 (init), upper bits set
+        @(posedge clk);
+        check16(16'hFFFF, read_crc(0), "reserved bits: CRC=0xFFFF (init worked)");
+        check1(1'b0, read_busy(0), "reserved bits: not busy");
+        // Write data with upper bits set — should only process data[7:0]
+        bus_write(32'hFFFF_0031);  // bit[8]=0, data=0x31, upper garbage
+        repeat(10) @(posedge clk);
+        // CRC should match CRC of single '1' byte
+        do_init;
+        feed_byte(8'h31);
+        begin : reserved_block
+            reg [15:0] ref_crc;
+            ref_crc = read_crc(0);
+            // Start over with garbage in upper bits
+            do_init;
+            bus_write(32'hDEAD_0031);
+            repeat(10) @(posedge clk);
+            check16(ref_crc, read_crc(0), "reserved bits: upper bits ignored");
+        end
+
+        // ---- Test 20: Repeated init idempotent ----
+        $display("--- Test 20: Repeated init ---");
+        do_init;
+        feed_byte(8'hAA);
+        do_init;  // second init
+        do_init;  // third init
+        check16(16'hFFFF, read_crc(0), "triple init: CRC=0xFFFF");
+        // Normal operation after
+        feed_byte(8'h31); feed_byte(8'h32); feed_byte(8'h33);
+        feed_byte(8'h34); feed_byte(8'h35); feed_byte(8'h36);
+        feed_byte(8'h37); feed_byte(8'h38); feed_byte(8'h39);
+        check16(16'h4B37, read_crc(0), "normal after triple init");
+
         // ---- Summary ----
         $display("");
         $display("=== Results: %0d PASS, %0d FAIL ===", pass_count, fail_count);

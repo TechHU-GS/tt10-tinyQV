@@ -288,6 +288,470 @@ module tb_seal;
         rd0 = data_out;
         check("commit reset: read0 = 0x11223344", rd0 == 32'h11223344);
 
+        // --- Test 8: T-SEAL-05 CRC bit-exact (highest priority) ---
+        // Reference: CRC16-MODBUS(sensor_id, value[7:0..31:24], mono[7:0..31:24])
+        // Computed via Python: crc16_modbus(init=0xFFFF, poly=0xA001)
+        $display("--- Test 8: CRC bit-exact verification ---");
+
+        // Reset state: mono_count is currently 5 (from tests 2,4,5,6a,6b)
+        // We need to reset to get a known mono_count.
+        // Apply hardware reset to clear mono_count.
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h01;  // Known session counter
+        repeat(5) @(posedge clk);
+
+        // Vector 1: sensor=0xAA, value=0x00000000, mono=0
+        // Expected CRC: 0x578C
+        seal_write_data(32'h00000000);
+        seal_write_ctrl({8'hAA, 1'b1, 1'b0});  // sensor_id=0xAA, commit
+        wait_seal_done;
+        rd0 = data_out;                          // read0: value
+        check("V1 value=0x00000000", rd0 == 32'h00000000);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd1 = data_out;                          // read1: {sid, mono[23:0]}
+        check("V1 mono[23:0]=0", rd1[23:0] == 24'd0);
+        check("V1 session_id=0x01", rd1[31:24] == 8'h01);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd2 = data_out;                          // read2: {mono[31:24], crc, 0x00}
+        check("V1 mono[31:24]=0", rd2[31:24] == 8'h00);
+        check("V1 CRC=0x578C", rd2[23:8] == 16'h578C);
+        check("V1 pad=0x00", rd2[7:0] == 8'h00);
+
+        // Vector 2: sensor=0xFF, value=0xFFFFFFFF, mono=1
+        // bytes: FF FF FF FF FF 01 00 00 00
+        // Expected: Python crc16_modbus([0xFF,0xFF,0xFF,0xFF,0xFF,0x01,0x00,0x00,0x00])
+        seal_write_data(32'hFFFFFFFF);
+        seal_write_ctrl({8'hFF, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);  // skip read0
+        rd1 = data_out;
+        check("V2 mono[23:0]=1", rd1[23:0] == 24'd1);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd2 = data_out;
+        // bytes: FF FF FF FF FF 01 00 00 00 → CRC=0xE80E
+        check("V2 CRC=0xE80E", rd2[23:8] == 16'hE80E);
+
+        // --- Test 9: T-SEAL-04 mono_count sequence (0, 1, 2) ---
+        $display("--- Test 9: Mono count strict sequence ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h77;
+        repeat(5) @(posedge clk);
+
+        // Commit #0
+        seal_write_data(32'h11111111);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("commit0 mono=0", data_out[23:0] == 24'd0);
+
+        // Commit #1
+        seal_write_data(32'h22222222);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("commit1 mono=1", data_out[23:0] == 24'd1);
+
+        // Commit #2
+        seal_write_data(32'h33333333);
+        seal_write_ctrl({8'h03, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("commit2 mono=2", data_out[23:0] == 24'd2);
+
+        // --- Test 10: T-SEAL-03 sealed_sid first and second commit ---
+        $display("--- Test 10: Session ID lock ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'hAB;
+        repeat(5) @(posedge clk);
+
+        // First commit — should lock session_id = 0xAB
+        seal_write_data(32'h00000000);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("1st commit sid=0xAB", data_out[31:24] == 8'hAB);
+
+        // Change counter, second commit — sid should still be 0xAB
+        session_ctr_in = 8'hCD;
+        seal_write_data(32'h00000000);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("2nd commit sid=0xAB (locked)", data_out[31:24] == 8'hAB);
+
+        // Third commit — still 0xAB
+        session_ctr_in = 8'hEF;
+        seal_write_data(32'h00000000);
+        seal_write_ctrl({8'h03, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        check("3rd commit sid=0xAB (still)", data_out[31:24] == 8'hAB);
+
+        // --- Test 11: T-SEAL-02 read_seq reset on commit ---
+        $display("--- Test 11: read_seq timing on commit ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h10;
+        repeat(5) @(posedge clk);
+
+        // Commit value A
+        seal_write_data(32'hAAAA0001);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+
+        // Read once (read_seq=0 → value), advance to read_seq=1
+        check("pre-commit rd0=0xAAAA0001", data_out == 32'hAAAA0001);
+        seal_read_data; repeat(2) @(posedge clk);
+        // Now read_seq=1 (showing session+mono)
+
+        // Commit value B — should reset read_seq to 0
+        seal_write_data(32'hBBBB0002);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+
+        // After commit, read should start from seq 0 (value)
+        check("post-commit rd0=0xBBBB0002", data_out == 32'hBBBB0002);
+
+        // Full readout to confirm sequence
+        seal_read_data; repeat(2) @(posedge clk);
+        rd1 = data_out;
+        check("post-commit rd1 mono=1", rd1[23:0] == 24'd1);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd2 = data_out;
+        check("post-commit rd2 pad=0", rd2[7:0] == 8'h00);
+
+        // --- Test 12: commit+crc_reset both set (commit wins) ---
+        $display("--- Test 12: commit+crc_reset priority ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h20;
+        repeat(5) @(posedge clk);
+
+        seal_write_data(32'hDEAD0000);
+        // ctrl_in = {sensor_id=0x55, commit=1, crc_reset=1} — both bits set
+        seal_write_ctrl({8'h55, 1'b1, 1'b1});
+        wait_seal_done;
+        rd0 = data_out;
+        check("commit+reset: value correct", rd0 == 32'hDEAD0000);
+        // CRC should be valid (commit executed, not just reset)
+        seal_read_data; repeat(2) @(posedge clk);
+        seal_read_data; repeat(2) @(posedge clk);
+        check("commit+reset: CRC!=0", data_out[23:8] != 16'h0000);
+
+        // --- Test 13: Mono counter overflow (0xFFFFFFFF → 0x00000000) ---
+        $display("--- Test 13: Mono counter overflow ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h30;
+        repeat(5) @(posedge clk);
+
+        // Force mono_count to 0xFFFFFFFF via hierarchical access
+        force uut.mono_count = 32'hFFFF_FFFF;
+        @(posedge clk);
+        release uut.mono_count;
+        @(posedge clk);
+
+        // Commit — mono should be 0xFFFFFFFF, then wrap to 0
+        seal_write_data(32'hDEAD0000);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+
+        // Read mono from sealed record
+        seal_read_data; repeat(2) @(posedge clk);
+        rd1 = data_out;
+        check("overflow: sealed_mono[23:0]=0xFFFFFF", rd1[23:0] == 24'hFFFFFF);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd2 = data_out;
+        check("overflow: sealed_mono[31:24]=0xFF", rd2[31:24] == 8'hFF);
+
+        // Next commit — mono_count should have wrapped to 0x00000000
+        seal_write_data(32'hBEEF0000);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        rd1 = data_out;
+        check("overflow: after wrap mono=0", rd1[23:0] == 24'd0);
+        seal_read_data; repeat(2) @(posedge clk);
+        rd2 = data_out;
+        check("overflow: after wrap mono[31:24]=0", rd2[31:24] == 8'h00);
+
+        // --- Test 14: data_wr during S_FEED_BYTES (value overwrite) ---
+        // seal_register latches value on data_wr in IDLE state.
+        // During FEED_BYTES, data_wr should be accepted (value_reg updated)
+        // but it won't affect the CURRENT commit (feed is using old value_reg).
+        $display("--- Test 14: data_wr during commit ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h40;
+        repeat(5) @(posedge clk);
+
+        seal_write_data(32'h1111_1111);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        // While seal is busy, write a different value
+        repeat(2) @(posedge clk);
+        check("seal busy for overwrite test", ctrl_out[0] == 1'b1);
+        seal_write_data(32'h2222_2222);  // this writes to value_reg while busy
+        wait_seal_done;
+
+        // Current commit used 0x11111111 (latched before commit started)
+        rd0 = data_out;
+        check("commit used original value", rd0 == 32'h1111_1111);
+
+        // data_wr during FEED_BYTES was IGNORED (state != IDLE).
+        // value_reg still holds 0x11111111.
+        // Next commit without fresh data_wr reuses old value.
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+        rd0 = data_out;
+        check("next commit reuses old value (wr in busy ignored)", rd0 == 32'h1111_1111);
+
+        // --- Test 15: Rapid commits — seal should process sequentially ---
+        $display("--- Test 15: Rapid sequential commits ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h50;
+        repeat(5) @(posedge clk);
+
+        // Commit 1
+        seal_write_data(32'hAAAA_0001);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+
+        // Immediately commit 2 (no wait between)
+        seal_write_data(32'hBBBB_0002);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+
+        // Read should show commit 2's data
+        rd0 = data_out;
+        check("rapid: latest value=0xBBBB0002", rd0 == 32'hBBBB_0002);
+        seal_read_data; repeat(2) @(posedge clk);
+        check("rapid: mono=1", data_out[23:0] == 24'd1);
+
+        // --- Test 16: CRC engine busy at commit time ---
+        // If CRC is busy (from external source), seal should wait in FEED_BYTES
+        $display("--- Test 16: CRC busy stalls seal ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h60;
+        repeat(5) @(posedge clk);
+
+        seal_write_data(32'h0000_0001);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        // Seal should eventually complete even though CRC takes time
+        wait_seal_done;
+        check("seal completes with CRC delays", ctrl_out[1] == 1'b1);
+
+        // Verify CRC is valid (non-zero)
+        seal_read_data; repeat(2) @(posedge clk);
+        seal_read_data; repeat(2) @(posedge clk);
+        check("CRC valid after stalls", data_out[23:8] != 16'h0000);
+
+        // --- Test 17: A2 — Reset clears mono_count + session_locked ---
+        $display("--- Test 17: Reset clears mono + session ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'hA0;
+        repeat(5) @(posedge clk);
+
+        // Do 3 commits to set mono=2
+        seal_write_data(32'h11111111);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0}); wait_seal_done;
+        seal_write_data(32'h22222222);
+        seal_write_ctrl({8'h02, 1'b1, 1'b0}); wait_seal_done;
+        seal_write_data(32'h33333333);
+        seal_write_ctrl({8'h03, 1'b1, 1'b0}); wait_seal_done;
+
+        // Verify mono=2
+        seal_read_data; repeat(2) @(posedge clk);
+        check("pre-reset mono=2", data_out[23:0] == 24'd2);
+        check("pre-reset sid=0xA0", data_out[31:24] == 8'hA0);
+
+        // Simulate WDT/soft reset (just re-assert rst_n)
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'hB0;  // different counter value
+        repeat(5) @(posedge clk);
+
+        // mono_count should be 0, session should re-lock
+        seal_write_data(32'h44444444);
+        seal_write_ctrl({8'h04, 1'b1, 1'b0}); wait_seal_done;
+
+        seal_read_data; repeat(2) @(posedge clk);
+        check("post-reset mono=0 (reset clears)", data_out[23:0] == 24'd0);
+        check("post-reset sid=0xB0 (new session)", data_out[31:24] == 8'hB0);
+
+        // --- Test 18: C1 — Simultaneous commit + crc_reset ---
+        $display("--- Test 18: C1 simultaneous commit+crc_reset ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h01;
+        repeat(5) @(posedge clk);
+
+        // First: do commit with separate crc_reset step (reference)
+        seal_write_ctrl(10'b00_0000_0001);  // standalone crc_reset
+        repeat(2) @(posedge clk);
+        seal_write_data(32'h00000000);
+        seal_write_ctrl({8'hAA, 1'b1, 1'b0});  // commit
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        seal_read_data; repeat(2) @(posedge clk);
+        begin : c1_ref_block
+            reg [15:0] ref_crc;
+            ref_crc = data_out[23:8];
+            $display("  Reference CRC = 0x%04X", ref_crc);
+
+            // Reset and do commit with both bits set (no separate crc_reset step)
+            rst_n = 0;
+            repeat(5) @(posedge clk);
+            rst_n = 1;
+            session_ctr_in = 8'h01;
+            repeat(5) @(posedge clk);
+
+            // No separate crc_reset! Both bits set:
+            seal_write_data(32'h00000000);
+            seal_write_ctrl({8'hAA, 1'b1, 1'b1});  // commit=1, crc_reset=1
+            wait_seal_done;
+            seal_read_data; repeat(2) @(posedge clk);
+            seal_read_data; repeat(2) @(posedge clk);
+            check("C1: CRC matches ref (both bits)", data_out[23:8] == ref_crc);
+        end
+
+        // --- Test 19: C2 — SEAL_DATA write during FEED_BYTES discarded ---
+        $display("--- Test 19: C2 SEAL_DATA write in FEED_BYTES ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h70;
+        repeat(5) @(posedge clk);
+
+        // Write value and commit
+        seal_write_data(32'hAAAA_AAAA);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        repeat(3) @(posedge clk);  // Enter FEED_BYTES
+        check("T19: busy during feed", ctrl_out[0] == 1'b1);
+
+        // Try to overwrite value during FEED_BYTES
+        seal_write_data(32'hBBBB_BBBB);
+        // Wait for completion
+        wait_seal_done;
+
+        // Verify original value was sealed
+        rd0 = data_out;
+        check("C2: sealed original 0xAAAAAAAA", rd0 == 32'hAAAA_AAAA);
+
+        // Verify next commit: if value_reg was silently overwritten, it would use 0xBBBBBBBB
+        // If properly discarded, next commit with no fresh data_wr reuses old 0xAAAAAAAA
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        wait_seal_done;
+        rd0 = data_out;
+        check("C2: next commit still 0xAAAAAAAA", rd0 == 32'hAAAA_AAAA);
+
+        // --- Test 20: C3 — Consecutive commits without explicit crc_reset ---
+        $display("--- Test 20: C3 no explicit crc_reset between commits ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h01;
+        repeat(5) @(posedge clk);
+
+        // Commit 1: value=0xDEAD, sensor=0x55 — NO crc_reset first
+        seal_write_data(32'h0000DEAD);
+        seal_write_ctrl({8'h55, 1'b1, 1'b0});  // commit only, no crc_reset
+        wait_seal_done;
+        seal_read_data; repeat(2) @(posedge clk);
+        seal_read_data; repeat(2) @(posedge clk);
+        begin : c3_block
+            reg [15:0] crc1, crc2;
+            crc1 = data_out[23:8];
+            $display("  Commit1 CRC=0x%04X (mono=0)", crc1);
+
+            // Commit 2: same value, same sensor — NO crc_reset
+            seal_write_data(32'h0000DEAD);
+            seal_write_ctrl({8'h55, 1'b1, 1'b0});
+            wait_seal_done;
+            seal_read_data; repeat(2) @(posedge clk);
+            seal_read_data; repeat(2) @(posedge clk);
+            crc2 = data_out[23:8];
+            $display("  Commit2 CRC=0x%04X (mono=1)", crc2);
+
+            // CRCs differ because mono changed (both started from 0xFFFF)
+            check("C3: CRCs differ (auto-init works)", crc1 != crc2);
+            // Both should be non-zero
+            check("C3: CRC1 non-zero", crc1 != 16'h0000);
+            check("C3: CRC2 non-zero", crc2 != 16'h0000);
+        end
+
+        // --- Test 21: commit_dropped sticky flag ---
+        $display("--- Test 21: commit_dropped flag ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h80;
+        repeat(5) @(posedge clk);
+
+        check("commit_dropped=0 initially", ctrl_out[2] == 1'b0);
+
+        // Start a commit
+        seal_write_data(32'h11110000);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        repeat(3) @(posedge clk);
+        check("T21: busy", ctrl_out[0] == 1'b1);
+
+        // Try commit while busy
+        seal_write_ctrl({8'h02, 1'b1, 1'b0});
+        repeat(2) @(posedge clk);
+        check("commit_dropped=1 (sticky)", ctrl_out[2] == 1'b1);
+
+        // Wait for first commit to finish
+        wait_seal_done;
+        check("commit_dropped still 1", ctrl_out[2] == 1'b1);
+
+        // Successful commit clears it
+        seal_write_data(32'h22220000);
+        seal_write_ctrl({8'h03, 1'b1, 1'b0});
+        wait_seal_done;
+        check("commit_dropped=0 after success", ctrl_out[2] == 1'b0);
+
+        // --- Test 22: FSM illegal state recovery ---
+        $display("--- Test 22: FSM illegal state ---");
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'h90;
+        repeat(5) @(posedge clk);
+
+        // Force illegal state
+        force uut.state = 2'd3;
+        @(posedge clk);
+        release uut.state;
+        @(posedge clk);
+        @(posedge clk);  // default branch should transition to S_IDLE
+        check("illegal state → IDLE", ctrl_out[0] == 1'b0);
+        check("ready after recovery", ctrl_out[1] == 1'b1);
+
+        // Verify normal operation works after recovery
+        seal_write_data(32'hDEAD_BEEF);
+        seal_write_ctrl({8'h01, 1'b1, 1'b0});
+        wait_seal_done;
+        rd0 = data_out;
+        check("normal after FSM recovery", rd0 == 32'hDEAD_BEEF);
+
         // ================================================================
         // Summary
         // ================================================================

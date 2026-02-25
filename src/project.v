@@ -48,6 +48,8 @@ module tt_um_MichaelBell_tinyQV (
     reg rst_reg_n;
 
     // WDT / soft reset hold counter (32 clk minimum hold)
+    // Note: soft_reset is guaranteed single-cycle because MMIO data_ready=1
+    // (CPU deasserts write_n the next cycle). No edge detection needed.
     reg [5:0] reset_hold_counter;
     wire wdt_reset;
     wire soft_reset = (write_n != 2'b11) && (connect_peripheral == PERI_SYSINFO)
@@ -77,7 +79,7 @@ module tt_um_MichaelBell_tinyQV (
     wire       qspi_ram_b_select;
     assign uio_out = {qspi_ram_b_select, qspi_ram_a_select, qspi_data_out[3:2],
                       qspi_clk_out, qspi_data_out[1:0], qspi_flash_select};
-    assign uio_oe = rst_n ? {2'b11, qspi_data_oe[3:2], 1'b1, qspi_data_oe[1:0], 1'b1} : 8'h00;
+    assign uio_oe = rst_reg_n ? {2'b11, qspi_data_oe[3:2], 1'b1, qspi_data_oe[1:0], 1'b1} : 8'h00;
 
     // ================================================================
     // TinyQV CPU data bus signals
@@ -119,9 +121,15 @@ module tt_um_MichaelBell_tinyQV (
     reg  [7:0] gpio_out_sel;
     reg  [7:0] gpio_out;
 
-    // I2C signals (from i2c_peripheral)
-    wire       i2c_scl_t;   // 1=drive low, 0=release
-    wire       i2c_sda_t;   // 1=drive low, 0=release
+    // I2C line-level signals (from Forencich i2c_master via i2c_peripheral)
+    // Pin-level semantics (push-pull emulating open-drain):
+    //   *_t = 1 → output HIGH (bus released, external 4.7K pullup holds high)
+    //   *_t = 0 → output LOW  (bus pulled low)
+    // Reset state: *_t = 1 (both lines released, idle high)
+    // PCB: uo[6] —1KΩ— SDA bus —4.7KΩ— VCC; uo[2] —100Ω— SCL bus —4.7KΩ— VCC
+    // Limitation: no clock stretching support (SCL is push-pull, single master only)
+    wire       i2c_scl_t;
+    wire       i2c_sda_t;
 
     // ================================================================
     // UART
@@ -175,8 +183,13 @@ module tt_um_MichaelBell_tinyQV (
     reg [1:0] pps_sync;
     reg       pps_prev;
     always @(posedge clk) begin
-        pps_sync <= {pps_sync[0], ui_in[4]};
-        pps_prev <= pps_sync[1];
+        if (!rst_reg_n) begin
+            pps_sync <= 2'b0;
+            pps_prev <= 1'b0;
+        end else begin
+            pps_sync <= {pps_sync[0], ui_in[4]};
+            pps_prev <= pps_sync[1];
+        end
     end
     wire pps_rising = pps_sync[1] && !pps_prev;
 
@@ -296,11 +309,11 @@ module tt_um_MichaelBell_tinyQV (
     // ================================================================
     assign uo_out[0] = gpio_out_sel[0] ? gpio_out[0] : uart_txd;         // UART TX
     assign uo_out[1] = gpio_out_sel[1] ? gpio_out[1] : 1'b1;             // SX1268 RESET (default high=not reset)
-    assign uo_out[2] = gpio_out_sel[2] ? gpio_out[2] : i2c_scl_t;  // I2C SCL (Forencich: _t=_o, 0=low 1=release)
+    assign uo_out[2] = gpio_out_sel[2] ? gpio_out[2] : i2c_scl_t;  // I2C SCL (0=low, 1=release)
     assign uo_out[3] = gpio_out_sel[3] ? gpio_out[3] : spi_mosi;         // SPI MOSI → SX1268
     assign uo_out[4] = gpio_out_sel[4] ? gpio_out[4] : spi_cs;           // SPI CS → SX1268
     assign uo_out[5] = gpio_out_sel[5] ? gpio_out[5] : spi_sck;          // SPI SCK → SX1268
-    assign uo_out[6] = gpio_out_sel[6] ? gpio_out[6] : i2c_sda_t;  // I2C SDA (Forencich: _t=_o, 0=low 1=release)
+    assign uo_out[6] = gpio_out_sel[6] ? gpio_out[6] : i2c_sda_t;  // I2C SDA (0=low, 1=release)
     assign uo_out[7] = gpio_out_sel[7] ? gpio_out[7] : 1'b0;             // LED GPIO
 
     // ================================================================
