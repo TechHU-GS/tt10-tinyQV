@@ -292,13 +292,11 @@ module tt_um_MichaelBell_tinyQV (
     // ================================================================
     assign uo_out[0] = gpio_out_sel[0] ? gpio_out[0] : uart_txd;         // UART TX
     assign uo_out[1] = gpio_out_sel[1] ? gpio_out[1] : 1'b1;             // SX1268 RESET (default high=not reset)
-    assign uo_out[2] = gpio_out_sel[2] ? gpio_out[2] :
-                       (i2c_scl_t ? 1'b0 : 1'b1);                         // I2C SCL
+    assign uo_out[2] = gpio_out_sel[2] ? gpio_out[2] : i2c_scl_t;  // I2C SCL (Forencich: _t=_o, 0=low 1=release)
     assign uo_out[3] = gpio_out_sel[3] ? gpio_out[3] : spi_mosi;         // SPI MOSI → SX1268
     assign uo_out[4] = gpio_out_sel[4] ? gpio_out[4] : spi_cs;           // SPI CS → SX1268
     assign uo_out[5] = gpio_out_sel[5] ? gpio_out[5] : spi_sck;          // SPI SCK → SX1268
-    assign uo_out[6] = gpio_out_sel[6] ? gpio_out[6] :
-                       (i2c_sda_t ? 1'b0 : 1'b1);                         // I2C SDA
+    assign uo_out[6] = gpio_out_sel[6] ? gpio_out[6] : i2c_sda_t;  // I2C SDA (Forencich: _t=_o, 0=low 1=release)
     assign uo_out[7] = gpio_out_sel[7] ? gpio_out[7] : 1'b0;             // LED GPIO
 
     // ================================================================
@@ -393,10 +391,31 @@ module tt_um_MichaelBell_tinyQV (
     );
 
     // ================================================================
-    // Stubs for modules not yet implemented
+    // I2C Master (Forencich) + MMIO Bridge
     // ================================================================
-    assign i2c_scl_t = 1'b0;  // stub: release (high)
-    assign i2c_sda_t = 1'b0;  // stub: release (high)
+    wire        i2c_data_wr = (write_n != 2'b11) && (connect_peripheral == PERI_I2C_DATA);
+    wire        i2c_data_rd = (read_n  != 2'b11) && (connect_peripheral == PERI_I2C_DATA);
+    wire        i2c_config_wr = (write_n != 2'b11) && (connect_peripheral == PERI_I2C_CONFIG);
+    wire [31:0] i2c_data_out;
+    wire [31:0] i2c_config_out;
+
+    i2c_peripheral i_i2c_peri (
+        .clk        (clk),
+        .rst_n      (rst_reg_n),
+        .data_in    (data_to_write),
+        .data_wr    (i2c_data_wr),
+        .data_rd    (i2c_data_rd),
+        .data_out   (i2c_data_out),
+        .config_in  (data_to_write),
+        .config_wr  (i2c_config_wr),
+        .config_out (i2c_config_out),
+        .scl_i      (1'b1),         // Single master, no clock stretching detection
+        .scl_o      (),
+        .scl_t      (i2c_scl_t),
+        .sda_i      (i2c_sda_i),
+        .sda_o      (),
+        .sda_t      (i2c_sda_t)
+    );
 
     // ================================================================
     // Read data mux
@@ -411,8 +430,8 @@ module tt_um_MichaelBell_tinyQV (
                 PERI_GPIO_OUT_SEL: data_from_read = {24'h0, gpio_out_sel};
                 PERI_UART:         data_from_read = {24'h0, uart_rx_data};
                 PERI_UART_STATUS:  data_from_read = {30'h0, uart_rx_valid, uart_tx_busy};
-                PERI_I2C_DATA:     data_from_read = 32'h0000_0000;  // TODO v0.3
-                PERI_I2C_CONFIG:   data_from_read = 32'h0000_003F;  // TODO v0.3 (default prescale=63)
+                PERI_I2C_DATA:     data_from_read = i2c_data_out;
+                PERI_I2C_CONFIG:   data_from_read = i2c_config_out;
                 PERI_SPI:          data_from_read = {24'h0, spi_data};
                 PERI_SPI_STATUS:   data_from_read = {31'h0, spi_busy};
                 PERI_RTC:          data_from_read = rtc_seconds;

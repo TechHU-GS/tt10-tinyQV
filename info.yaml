@@ -21,6 +21,8 @@ project:
     - "latch_mem.v"
     - "crc16_engine.v"
     - "crc16_peripheral.v"
+    - "i2c_master.v"
+    - "i2c_peripheral.v"
     - "watchdog.v"
     - "rtc_counter.v"
     - "tinyQV/cpu/tinyqv.v"
