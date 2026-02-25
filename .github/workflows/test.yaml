@@ -18,18 +18,20 @@ jobs:
         run: |
           cd test
           iverilog -g2012 -DSIM -o tb_crc16.vvp \
-            tb_crc16.v ../src/crc16_engine.v ../src/crc16_peripheral.v \
-            && vvp tb_crc16.vvp | tee crc16_result.txt
-          ! grep -q FAIL crc16_result.txt
+            tb_crc16.v ../src/crc16_engine.v ../src/crc16_peripheral.v
+          vvp tb_crc16.vvp > crc16_result.txt 2>&1 || true
+          cat crc16_result.txt
+          grep -q "ALL TESTS PASSED" crc16_result.txt
 
       - name: Run Watchdog unit test
         shell: bash
         run: |
           cd test
           iverilog -g2012 -DSIM -o tb_watchdog.vvp \
-            tb_watchdog.v ../src/watchdog.v \
-            && vvp tb_watchdog.vvp | tee wdt_result.txt
-          ! grep -q FAIL wdt_result.txt
+            tb_watchdog.v ../src/watchdog.v
+          vvp tb_watchdog.vvp > wdt_result.txt 2>&1 || true
+          cat wdt_result.txt
+          grep -q "ALL TESTS PASSED" wdt_result.txt
 
       - name: Run P0-A integration test
         shell: bash
@@ -46,8 +48,9 @@ jobs:
             ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
             ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
             ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
-            ../src/tinyQV/peri/spi/spi.v \
-            && timeout 300 vvp tb_integration.vvp | tee integration_result.txt
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 300 vvp tb_integration.vvp > integration_result.txt 2>&1 || true
+          cat integration_result.txt
           grep -q "ALL TESTS PASSED" integration_result.txt
 
       - name: Upload test results
