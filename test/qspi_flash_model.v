@@ -18,7 +18,9 @@
 
 `timescale 1ns / 1ps
 
-module qspi_flash_model (
+module qspi_flash_model #(
+    parameter HEX_FILE = "fw_p0a.hex"
+) (
     input  wire       spi_clk,
     input  wire       spi_cs_n,      // active low
     input  wire [3:0] spi_data_in,   // data FROM controller TO flash
@@ -33,7 +35,7 @@ module qspi_flash_model (
     initial begin
         for (init_i = 0; init_i < 262144; init_i = init_i + 1)
             mem[init_i] = 8'hFF;
-        $readmemh("fw_p0a.hex", mem);
+        $readmemh(HEX_FILE, mem);
     end
 
     // Protocol states
