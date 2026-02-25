@@ -1,0 +1,43 @@
+{
+    "DESIGN_NAME": "tt_um_MichaelBell_tinyQV",
+    "VERILOG_FILES": [
+        "dir::src/project.v",
+        "dir::src/latch_mem.v",
+        "dir::src/crc16_engine.v",
+        "dir::src/crc16_peripheral.v",
+        "dir::src/i2c_master.v",
+        "dir::src/i2c_peripheral.v",
+        "dir::src/watchdog.v",
+        "dir::src/rtc_counter.v",
+        "dir::src/seal_register.v",
+        "dir::src/tinyQV/cpu/tinyqv.v",
+        "dir::src/tinyQV/cpu/alu.v",
+        "dir::src/tinyQV/cpu/core.v",
+        "dir::src/tinyQV/cpu/counter.v",
+        "dir::src/tinyQV/cpu/cpu.v",
+        "dir::src/tinyQV/cpu/decode.v",
+        "dir::src/tinyQV/cpu/mem_ctrl.v",
+        "dir::src/tinyQV/cpu/qspi_ctrl.v",
+        "dir::src/tinyQV/cpu/register.v",
+        "dir::src/tinyQV/cpu/latch_reg.v",
+        "dir::src/tinyQV/peri/uart/uart_tx.v",
+        "dir::src/tinyQV/peri/uart/uart_rx.v",
+        "dir::src/tinyQV/peri/spi/spi.v"
+    ],
+    "CLOCK_PORT": "clk",
+    "CLOCK_PERIOD": 40.0,
+
+    "FP_CORE_UTIL": 45,
+    "FP_SIZING": "relative",
+    "FP_ASPECT_RATIO": 1.0,
+
+    "PNR_SDC_FILE": "dir::constraints/pnr.sdc",
+    "SIGNOFF_SDC_FILE": "dir::constraints/signoff.sdc",
+
+    "RUN_ANTENNA_REPAIR": true,
+    "GRT_ANTENNA_ITERS": 5,
+    "GRT_ANTENNA_MARGIN": 10,
+
+    "RUN_LINTER": true,
+    "ERROR_ON_LINTER_WARNINGS": false
+}

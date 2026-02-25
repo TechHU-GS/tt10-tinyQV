@@ -327,14 +327,14 @@ module tt_um_MichaelBell_tinyQV (
     wire        crc_peri_dv;
     wire [31:0] crc_peri_data_out;
 
-    // TODO v1.0: seal arbitration (seal_using_crc mux)
-    // For now, peripheral bridge drives engine directly
-    assign crc_engine_init = crc_peri_init;
-    assign crc_engine_data = crc_peri_data;
-    assign crc_engine_dv   = crc_peri_dv;
+    // CRC arbitration: seal takes priority over CPU peripheral bridge
+    wire seal_using_crc = (seal_ctrl_out[0]);  // seal busy = state != IDLE
+    assign crc_engine_init = seal_using_crc ? seal_crc_init  : crc_peri_init;
+    assign crc_engine_data = seal_using_crc ? seal_crc_byte  : crc_peri_data;
+    assign crc_engine_dv   = seal_using_crc ? seal_crc_feed  : crc_peri_dv;
 
-    // CRC16 read output (v1.0: will override with busy=1 when seal active)
-    wire [31:0] crc16_read = crc_peri_data_out;
+    // When seal is active, CPU CRC16_DATA read shows busy=1
+    wire [31:0] crc16_read = seal_using_crc ? {15'b0, 1'b1, crc_engine_out} : crc_peri_data_out;
 
     crc16_engine i_crc16 (
         .clk        (clk),
@@ -391,6 +391,38 @@ module tt_um_MichaelBell_tinyQV (
     );
 
     // ================================================================
+    // Seal Register + Monotonic Counter
+    // ================================================================
+    wire        seal_data_wr = (write_n != 2'b11) && (connect_peripheral == PERI_SEAL_DATA);
+    wire        seal_data_rd = (read_n  != 2'b11) && (connect_peripheral == PERI_SEAL_DATA);
+    wire        seal_ctrl_wr = (write_n != 2'b11) && (connect_peripheral == PERI_SEAL_CTRL);
+    wire [31:0] seal_data_out;
+    wire [31:0] seal_ctrl_out;
+
+    // Seal ↔ CRC engine signals
+    wire [7:0]  seal_crc_byte;
+    wire        seal_crc_feed;
+    wire        seal_crc_init;
+
+    seal_register i_seal (
+        .clk            (clk),
+        .rst_n          (rst_reg_n),
+        .crc_byte       (seal_crc_byte),
+        .crc_feed       (seal_crc_feed),
+        .crc_busy       (crc_engine_busy),
+        .crc_value      (crc_engine_out),
+        .crc_init       (seal_crc_init),
+        .data_wr        (seal_data_wr),
+        .data_in        (data_to_write),
+        .data_out       (seal_data_out),
+        .data_rd        (seal_data_rd),
+        .ctrl_wr        (seal_ctrl_wr),
+        .ctrl_in        (data_to_write[9:0]),
+        .ctrl_out       (seal_ctrl_out),
+        .session_ctr_in (session_ctr)
+    );
+
+    // ================================================================
     // I2C Master (Forencich) + MMIO Bridge
     // ================================================================
     wire        i2c_data_wr = (write_n != 2'b11) && (connect_peripheral == PERI_I2C_DATA);
@@ -435,10 +467,10 @@ module tt_um_MichaelBell_tinyQV (
                 PERI_SPI:          data_from_read = {24'h0, spi_data};
                 PERI_SPI_STATUS:   data_from_read = {31'h0, spi_busy};
                 PERI_RTC:          data_from_read = rtc_seconds;
-                PERI_SEAL_DATA:    data_from_read = 32'h0000_0000;  // TODO v1.0
+                PERI_SEAL_DATA:    data_from_read = seal_data_out;
                 PERI_TIMER:        data_from_read = timer_count;
                 PERI_WDT:          data_from_read = wdt_remaining;
-                PERI_SEAL_CTRL:    data_from_read = 32'h0000_0002;  // TODO v1.0 (ready=1, busy=0)
+                PERI_SEAL_CTRL:    data_from_read = seal_ctrl_out;
                 PERI_SYSINFO:      data_from_read = sysinfo_read;
                 default:           data_from_read = 32'hFFFF_FFFF;
             endcase

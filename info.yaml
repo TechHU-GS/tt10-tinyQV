@@ -25,6 +25,7 @@ project:
     - "i2c_peripheral.v"
     - "watchdog.v"
     - "rtc_counter.v"
+    - "seal_register.v"
     - "tinyQV/cpu/tinyqv.v"
     - "tinyQV/cpu/alu.v"
     - "tinyQV/cpu/core.v"
