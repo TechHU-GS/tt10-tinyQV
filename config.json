@@ -27,7 +27,7 @@
     "CLOCK_PORT": "clk",
     "CLOCK_PERIOD": 40.0,
 
-    "FP_CORE_UTIL": 45,
+    "FP_CORE_UTIL": 65,
     "FP_SIZING": "relative",
     "FP_ASPECT_RATIO": 1.0,
 
@@ -36,7 +36,7 @@
 
     "RUN_ANTENNA_REPAIR": true,
     "GRT_ANTENNA_ITERS": 5,
-    "GRT_ANTENNA_MARGIN": 10,
+    "GRT_ANTENNA_MARGIN": 15,
 
     "RUN_LINTER": true,
     "ERROR_ON_LINTER_WARNINGS": false
