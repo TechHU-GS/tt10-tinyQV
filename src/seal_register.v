@@ -200,8 +200,10 @@ module seal_register (
                         if (!session_locked) begin
                             session_id     <= session_ctr_in;
                             session_locked <= 1'b1;
+                            sealed_sid     <= session_ctr_in;
+                        end else begin
+                            sealed_sid <= session_id;
                         end
-                        sealed_sid <= session_locked ? session_id : session_ctr_in;
 
                         // Increment mono counter
                         mono_count <= mono_count + 1;

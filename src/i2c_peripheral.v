@@ -106,17 +106,6 @@ module i2c_peripheral (
     // Need a cmd for: START+WRITE, START+READ, STOP-only
     wire needs_cmd = is_start_write || is_start_read || is_stop_only;
 
-    // Track if we're in write_multiple mode (auto-loop in WRITE_1)
-    reg in_write_mode;
-    always @(posedge clk) begin
-        if (rst)
-            in_write_mode <= 1'b0;
-        else if (is_start_write && !cmd_pending)
-            in_write_mode <= 1'b1;
-        else if (is_stop_only || is_start_read)
-            in_write_mode <= 1'b0;
-    end
-
     always @(posedge clk) begin
         if (rst) begin
             cmd_pending     <= 1'b0;
@@ -159,9 +148,9 @@ module i2c_peripheral (
 
     // ================================================================
     // TX Data channel — AXI Stream latch
-    // For START+WRITE: first byte comes with the cmd
-    // For subsequent writes: just push data (master is in WRITE_1 loop)
-    // tlast=1 when this is the last byte before STOP
+    // START+WRITE only sends a cmd (address phase); no TX data.
+    // Subsequent data-only writes push bytes here (master is in WRITE_1 loop).
+    // tlast=1 when this is the last byte before STOP.
     // ================================================================
     wire s_axis_data_tready;
 

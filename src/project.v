@@ -484,8 +484,7 @@ module tt_um_MichaelBell_tinyQV (
         if (!rst_reg_n) begin
             gpio_out_sel <= 8'b0000_0000;
             gpio_out <= 0;
-        end
-        if (write_n != 2'b11) begin
+        end else if (write_n != 2'b11) begin
             if (connect_peripheral == PERI_GPIO_OUT) gpio_out <= data_to_write[7:0];
             if (connect_peripheral == PERI_GPIO_OUT_SEL) gpio_out_sel <= data_to_write[7:0];
         end
