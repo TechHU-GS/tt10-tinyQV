@@ -98,7 +98,8 @@ module seal_register (
     // ================================================================
     wire seal_busy  = (state != S_IDLE);
     wire seal_ready = (state == S_IDLE);
-    assign ctrl_out = {30'b0, seal_ready, seal_busy};
+    reg  commit_dropped;  // sticky: set if commit arrives while busy
+    assign ctrl_out = {29'b0, commit_dropped, seal_ready, seal_busy};
 
     // ================================================================
     // Byte mux for CRC feed sequence
@@ -140,10 +141,15 @@ module seal_register (
             crc_byte       <= 8'd0;
             crc_feed       <= 1'b0;
             crc_init       <= 1'b0;
+            commit_dropped <= 1'b0;
         end else begin
             // Default: clear single-cycle pulses
             crc_feed <= 1'b0;
             crc_init <= 1'b0;
+
+            // Detect commit while busy (sticky, cleared on next successful commit)
+            if (ctrl_wr && ctrl_in[1] && seal_busy)
+                commit_dropped <= 1'b1;
 
             case (state)
                 S_IDLE: begin
@@ -155,12 +161,13 @@ module seal_register (
                         // Commit request — always init CRC to eliminate
                         // arbitration race with CPU CRC peripheral
                         if (ctrl_in[1]) begin
-                            crc_init      <= 1'b1;
-                            sensor_id_reg <= ctrl_in[9:2];
-                            cur_mono      <= mono_count;
-                            byte_idx      <= 4'd0;
-                            byte_sent     <= 1'b0;
-                            state         <= S_FEED_BYTES;
+                            crc_init       <= 1'b1;
+                            sensor_id_reg  <= ctrl_in[9:2];
+                            cur_mono       <= mono_count;
+                            byte_idx       <= 4'd0;
+                            byte_sent      <= 1'b0;
+                            commit_dropped <= 1'b0;  // clear on successful commit
+                            state          <= S_FEED_BYTES;
                         end
                         // Standalone CRC reset (no commit)
                         else if (ctrl_in[0])
