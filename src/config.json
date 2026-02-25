@@ -2,8 +2,8 @@
   "//": "LoRa Edge SoC — TTIHP 26a (IHP SG13G2)",
   "//": "Based on MichaelBell/ttihp25b-tinyQV config (proven on IHP shuttle)",
 
-  "//": "PL_TARGET_DENSITY_PCT - MichaelBell uses 66-70%, we use 68% (slightly more cells than original)",
-  "PL_TARGET_DENSITY_PCT": 68,
+  "//": "PL_TARGET_DENSITY_PCT - lower to 63% for hold buffer headroom (2452 buffers @ 68% caused DPL-0036)",
+  "PL_TARGET_DENSITY_PCT": 63,
 
   "//": "CLOCK_PERIOD - 25MHz = 40ns",
   "CLOCK_PERIOD": 40,
