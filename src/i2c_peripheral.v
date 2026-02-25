@@ -72,6 +72,8 @@ module i2c_peripheral (
     wire is_start_write = data_wr && mmio_cmd_start && (mmio_cmd_write || mmio_cmd_write_m);
     wire is_read_cmd    = data_wr && mmio_cmd_read;  // any READ (with or without START)
     wire is_data_write  = data_wr && !mmio_cmd_start && (mmio_cmd_write || mmio_cmd_write_m);
+    // WARNING: do NOT send stop-only during write_multiple — master is waiting
+    // for TX data with tlast=1. Use cmd_write+cmd_stop+data to end transaction.
     wire is_stop_only   = data_wr && mmio_cmd_stop && !mmio_cmd_start &&
                           !mmio_cmd_write && !mmio_cmd_write_m && !mmio_cmd_read;
 
@@ -275,7 +277,9 @@ module i2c_peripheral (
     );
 
     // Read outputs
-    assign data_out   = {21'b0, rx_has_data, i2c_busy, missed_ack_latch, rx_latch};
+    // bit[11]=tx_pending: firmware must poll tx_pending=0 before writing next byte
+    //   in write_multiple mode (i2c_busy stays high during entire transaction)
+    assign data_out   = {20'b0, tx_pending, rx_has_data, i2c_busy, missed_ack_latch, rx_latch};
     assign config_out = {16'b0, prescale_reg};
 
 endmodule

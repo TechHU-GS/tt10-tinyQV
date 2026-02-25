@@ -214,15 +214,19 @@ module tt_um_MichaelBell_tinyQV (
     // ================================================================
     // Interrupt mapping (timer only via IRQ17, timer_interrupt tied 0)
     // ================================================================
-    reg [1:0] ui_in_reg;
+    // 2-stage synchronizer for async DIO1 input (metastability protection)
+    reg [1:0] dio1_sync;
     always @(posedge clk) begin
-        ui_in_reg <= {1'b0, ui_in[0]};  // [0]=DIO1 edge, [1]=unused
+        if (!rst_reg_n)
+            dio1_sync <= 2'b0;
+        else
+            dio1_sync <= {dio1_sync[0], ui_in[0]};
     end
     wire [3:0] interrupt_req = {
         1'b0,              // [3] IRQ19: reserved (TX ready is level — use polling)
         uart_rx_valid,     // [2] IRQ18: UART RX data
         timer_irq,         // [1] IRQ17: countdown expired
-        ui_in_reg[0]       // [0] IRQ16: SX1268 DIO1
+        dio1_sync[1]       // [0] IRQ16: SX1268 DIO1 (level-sensitive, cleared via SPI)
     };
 
     // ================================================================

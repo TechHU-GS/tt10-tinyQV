@@ -152,18 +152,19 @@ module seal_register (
                         value_reg <= data_in;
 
                     if (ctrl_wr) begin
-                        // CRC reset request
-                        if (ctrl_in[0])
-                            crc_init <= 1'b1;
-
-                        // Commit request
+                        // Commit request — always init CRC to eliminate
+                        // arbitration race with CPU CRC peripheral
                         if (ctrl_in[1]) begin
+                            crc_init      <= 1'b1;
                             sensor_id_reg <= ctrl_in[9:2];
                             cur_mono      <= mono_count;
                             byte_idx      <= 4'd0;
                             byte_sent     <= 1'b0;
                             state         <= S_FEED_BYTES;
                         end
+                        // Standalone CRC reset (no commit)
+                        else if (ctrl_in[0])
+                            crc_init <= 1'b1;
                     end
                 end
 
