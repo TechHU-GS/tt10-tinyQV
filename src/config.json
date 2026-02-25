@@ -3,7 +3,8 @@
   "//": "Based on TTIHP standard config template",
 
   "//": "PL_TARGET_DENSITY_PCT - Increase if Global Placement fails with GPL-0302.",
-  "PL_TARGET_DENSITY_PCT": 60,
+  "//": "GPL-0302 suggested 0.66 uniform density, use 70 for margin.",
+  "PL_TARGET_DENSITY_PCT": 70,
 
   "//": "CLOCK_PERIOD - 25MHz = 40ns",
   "CLOCK_PERIOD": 40,
