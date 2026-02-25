@@ -8,7 +8,7 @@ TOPLEVEL_LANG ?= verilog
 PROG ?= hello
 PROG_FILE ?= $(PROG).hex
 SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = project.v latch_mem.v tinyQV/cpu/*.v tinyQV/peri/uart/*.v tinyQV/peri/spi/*.v tinyQV/peri/pwm/*.v tinyQV/peri/ttgame/*.v
+PROJECT_SOURCES = project.v latch_mem.v crc16_engine.v crc16_peripheral.v watchdog.v rtc_counter.v tinyQV/cpu/*.v tinyQV/peri/uart/*.v tinyQV/peri/spi/*.v
 
 VERILOG_SOURCES += sim_qspi.v
 COMPILE_ARGS +=  -DPROG_FILE=\"$(PROG_FILE)\"

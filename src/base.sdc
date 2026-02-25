@@ -26,15 +26,7 @@ set_output_delay -clock [get_clocks $::env(CLOCK_PORT)] -min $output_hold_delay_
 set spi_clk_setup_delay_value [expr $::env(CLOCK_PERIOD) * 0.2]
 set_output_delay -clock [get_clocks $::env(CLOCK_PORT)] -max $spi_clk_setup_delay_value {uio_out[3]}
 
-# Low delay on output 7 as this is (mainly) used for debug signals
+# Low delay on output 7 as this is (mainly) used for LED GPIO
 set_output_delay 1 -clock [get_clocks $::env(CLOCK_PORT)] {uo_out[7]}
-
-# Game clock
-create_clock [get_pins game_clk_buf/X] -name game_clk -period 1000
-set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) game_clk
-set_clock_transition $::env(CLOCK_TRANSITION_CONSTRAINT) game_clk
-
-set_false_path -from [get_clocks clk] -to [get_clocks game_clk]
-set_false_path -from [get_clocks game_clk] -to [get_clocks clk]
 
 set_propagated_clock [all_clocks]

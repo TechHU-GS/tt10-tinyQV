@@ -1,7 +1,7 @@
 name: test
 on: [push, workflow_dispatch]
 jobs:
-  test:
+  rtl_test:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repo
@@ -13,35 +13,48 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y iverilog
 
-      # Set Python up and install cocotb
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python packages
+      - name: Run CRC16 unit test
         shell: bash
-        run: pip install -r test/requirements.txt
-
-      - name: Run tests
         run: |
           cd test
-          make clean
-          make
-          # make will return success even if the test fails, so check for failure in the results.xml
-          ! grep failure results.xml
+          iverilog -g2012 -DSIM -o tb_crc16.vvp \
+            tb_crc16.v ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            && vvp tb_crc16.vvp | tee crc16_result.txt
+          ! grep -q FAIL crc16_result.txt
 
-      - name: Test Summary
-        uses: test-summary/action@v2.3
-        with:
-          paths: "test/results.xml"
+      - name: Run Watchdog unit test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_watchdog.vvp \
+            tb_watchdog.v ../src/watchdog.v \
+            && vvp tb_watchdog.vvp | tee wdt_result.txt
+          ! grep -q FAIL wdt_result.txt
+
+      - name: Run P0-A integration test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_integration.vvp \
+            tb_integration.v qspi_flash_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v \
+            && timeout 300 vvp tb_integration.vvp | tee integration_result.txt
+          grep -q "ALL TESTS PASSED" integration_result.txt
+
+      - name: Upload test results
         if: always()
-
-      - name: upload vcd
-        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-vcd
+          name: test-results
           path: |
-            test/sim_build/rtl/*.fst
-            test/results.xml
+            test/*_result.txt
+            test/*.vcd

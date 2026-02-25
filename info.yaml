@@ -1,14 +1,14 @@
 # Tiny Tapeout project information
 project:
-  title:        "TinyQV Risc-V SoC"      # Project title
-  author:       "Michael Bell"      # Your name
-  discord:      "rebelmike"      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "A Risc-V SoC for Tiny Tapeout"      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     64000000       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "LoRa Edge SoC"
+  author:       "TechHU-GS"
+  discord:      ""
+  description:  "RISC-V LoRa node SoC with CRC16, I2C, WDT, RTC, Seal peripherals"
+  language:     "Verilog"
+  clock_hz:     25000000       # 25MHz
 
   # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "3x2"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  tiles: "4x2"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
 
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
   top_module:  "tt_um_MichaelBell_tinyQV"
@@ -19,6 +19,10 @@ project:
   source_files:
     - "project.v"
     - "latch_mem.v"
+    - "crc16_engine.v"
+    - "crc16_peripheral.v"
+    - "watchdog.v"
+    - "rtc_counter.v"
     - "tinyQV/cpu/tinyqv.v"
     - "tinyQV/cpu/alu.v"
     - "tinyQV/cpu/core.v"
@@ -29,34 +33,31 @@ project:
     - "tinyQV/cpu/qspi_ctrl.v"
     - "tinyQV/cpu/register.v"
     - "tinyQV/cpu/latch_reg.v"
-    - "tinyQV/cpu/time.v"
     - "tinyQV/peri/uart/uart_tx.v"
     - "tinyQV/peri/uart/uart_rx.v"
     - "tinyQV/peri/spi/spi.v"
-    - "tinyQV/peri/pwm/pwm.v"
-    - "tinyQV/peri/ttgame/ttgame.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 pinout:
   # Inputs
-  ui[0]: "Interrupt 0"
-  ui[1]: "Interrupt 1"
+  ui[0]: "SX1268 DIO1 (IRQ)"
+  ui[1]: "SX1268 BUSY"
   ui[2]: "SPI MISO"
-  ui[3]: "1 MHz clock for time"
-  ui[4]: "Game controller latch"
-  ui[5]: "Game controller clock"
-  ui[6]: "Game controller data"
+  ui[3]: "I2C SDA in"
+  ui[4]: "1PPS input"
+  ui[5]: "GPIO in (spare)"
+  ui[6]: "GPIO in (spare)"
   ui[7]: "UART RX"
 
   # Outputs
   uo[0]: "UART TX"
-  uo[1]: "UART RTS"
-  uo[2]: "SPI DC"
+  uo[1]: "SX1268 RESET"
+  uo[2]: "I2C SCL"
   uo[3]: "SPI MOSI"
   uo[4]: "SPI CS"
   uo[5]: "SPI SCK"
-  uo[6]: "Debug UART TX"
-  uo[7]: "Debug signal / PWM"
+  uo[6]: "I2C SDA out"
+  uo[7]: "LED GPIO"
 
   # Bidirectional pins
   uio[0]: "Flash CS"
@@ -66,7 +67,7 @@ pinout:
   uio[4]: "SD2"
   uio[5]: "SD3"
   uio[6]: "RAM A CS"
-  uio[7]: "RAM B CS / PWM"
+  uio[7]: "RAM B CS"
 
 # Do not change!
 yaml_version: 6
