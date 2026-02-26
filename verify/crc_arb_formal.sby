@@ -1,0 +1,19 @@
+[tasks]
+bmc
+prove
+
+[options]
+bmc: mode bmc
+bmc: depth 5
+prove: mode prove
+prove: depth 5
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog -formal -DFORMAL crc_arb_wrapper.v
+prep -top crc_arb_wrapper
+
+[files]
+crc_arb_wrapper.v
