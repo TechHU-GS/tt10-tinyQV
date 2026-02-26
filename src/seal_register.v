@@ -1,3 +1,5 @@
+`default_nettype none
+`timescale 1ns / 1ps
 // Seal Register + Monotonic Counter
 // Hardware integrity watermark with non-backfillable ordering proof.
 //
