@@ -4,6 +4,7 @@
  */
 
 `default_nettype none
+`timescale 1ns / 1ps
 
 module latch_mem #(
     parameter RAM_BYTES = 32,
@@ -40,7 +41,8 @@ module latch_mem #(
 
     wire [1:0] txn_n = data_read_n & data_write_n;
     always @(posedge clk) begin
-        if (txn_n[1] == txn_n[0]) cycle <= 0;
+        if (!rstn) cycle <= 2'b0;
+        else if (txn_n[1] == txn_n[0]) cycle <= 0;
         else if (cycle[0] == 0) cycle[0] <= 1;
         else if (txn_n[1] == 1 && cycle == 2'b01) cycle <= 2'b10;
     end
@@ -64,6 +66,6 @@ module latch_mem #(
     endgenerate
     assign latch_data_in = data_in[{cycle,3'b000}+:8];
 
-    wire _unused = &{rstn, 1'b0};
+    wire _unused = &{1'b0};
 
 endmodule

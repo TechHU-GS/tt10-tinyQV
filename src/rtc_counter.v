@@ -13,6 +13,8 @@
 // Precision: depends on tick_1us accuracy (25MHz xtal / 25 = exact 1MHz)
 // ============================================================================
 
+`timescale 1ns / 1ps
+
 module rtc_counter (
     input  wire        clk,
     input  wire        rst_n,

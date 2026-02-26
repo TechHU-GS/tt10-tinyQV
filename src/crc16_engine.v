@@ -22,6 +22,8 @@
 //   - crc_out is valid when busy=0 (stable between bytes)
 // ============================================================================
 
+`timescale 1ns / 1ps
+
 module crc16_engine (
     input  wire        clk,
     input  wire        rst_n,

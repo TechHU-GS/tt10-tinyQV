@@ -16,11 +16,14 @@
 // blocked and reads return busy=1 (arbitration in project.v)
 // ============================================================================
 
+`timescale 1ns / 1ps
+
+/* verilator lint_off UNUSEDSIGNAL */
 module crc16_peripheral (
-    input  wire        clk,
-    input  wire        rst_n,
+    input  wire        clk,           // unused — pure combinational bridge
+    input  wire        rst_n,         // unused — pure combinational bridge
     // TinyQV bus interface
-    input  wire [31:0] data_in,       // write data
+    input  wire [31:0] data_in,       // write data — only [8:0] used
     input  wire        wr_en,         // write enable
     output wire [31:0] data_out,      // read data
     // CRC engine interface (directly connected or muxed in project.v)
@@ -42,3 +45,4 @@ module crc16_peripheral (
     assign data_out = {15'b0, crc_busy, crc_value};
 
 endmodule
+/* verilator lint_on UNUSEDSIGNAL */

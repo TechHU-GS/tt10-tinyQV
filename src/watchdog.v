@@ -14,6 +14,8 @@
 // tick_1us: 1MHz tick from project.v (25MHz / 25)
 // ============================================================================
 
+`timescale 1ns / 1ps
+
 module watchdog (
     input  wire        clk,
     input  wire        rst_n,
@@ -53,5 +55,27 @@ module watchdog (
             end
         end
     end
+
+`ifdef FORMAL
+    reg f_past_valid;
+    initial f_past_valid = 0;
+    always @(posedge clk) f_past_valid <= 1;
+
+    // P5: enabled is irreversible — once 1, always 1
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n) && $past(enabled))
+            assert(enabled);
+
+    // P6: counter never underflows — if 0 and no kick, stays 0
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n)
+            && $past(counter) == 32'd0 && !$past(kick && kick_value != 32'd0))
+            assert(counter == 32'd0);
+
+    // P7: wdt_reset only fires when counter transitions 1→0
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n) && wdt_reset)
+            assert($past(counter) == 32'd1);
+`endif
 
 endmodule

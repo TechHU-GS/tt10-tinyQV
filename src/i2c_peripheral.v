@@ -16,18 +16,22 @@
 // for data (using write_multiple mode). Each byte gets tlast=0 except
 // when cmd_stop is requested, which sends tlast=1 to finish the transfer.
 
+`timescale 1ns / 1ps
+
 module i2c_peripheral (
     input         clk,
     input         rst_n,
 
     // TinyQV MMIO — Slot 0x6: I2C_DATA
-    input  [31:0] data_in,
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  [31:0] data_in,        // only [12:0] used
     input         data_wr,
     input         data_rd,
     output [31:0] data_out,
 
     // TinyQV MMIO — Slot 0x7: I2C_CONFIG
-    input  [31:0] config_in,
+    input  [31:0] config_in,      // only [15:0] used
+    /* verilator lint_on UNUSEDSIGNAL */
     input         config_wr,
     output [31:0] config_out,
 
@@ -41,6 +45,28 @@ module i2c_peripheral (
 );
 
     wire rst = !rst_n;
+
+    // ================================================================
+    // 2-stage CDC synchronizer for external SDA input
+    // SDA comes from an off-chip I2C slave — asynchronous to clk.
+    // Without this, sda_i_reg in Forencich master is a single-stage
+    // sample, risking metastability. SCL does NOT need this: it is
+    // tied to 1'b1 at project.v (single master, no clock stretching).
+    //
+    // Timing impact: 2-cycle sampling delay on SDA. At 25MHz/100kHz
+    // each SCL half-period is ~125 clk cycles; 2-cycle delay is 1.6%,
+    // well within I2C protocol margins. Forencich master samples SDA
+    // by SCL edge, not single-cycle response, so delay is transparent.
+    //
+    // CRITICAL: i2c_master .sda_i MUST connect to sda_i_synced below,
+    // never to raw sda_i. Raw sda_i is only used as input to sda_sync.
+    // ================================================================
+    reg [1:0] sda_sync;
+    always @(posedge clk) begin
+        if (rst)  sda_sync <= 2'b11;  // idle high
+        else      sda_sync <= {sda_sync[0], sda_i};
+    end
+    wire sda_i_synced = sda_sync[1];
 
     // Prescale register (default 63 → 25MHz/4/63 ≈ 99.2kHz)
     reg [15:0] prescale_reg;
@@ -201,7 +227,7 @@ module i2c_peripheral (
     // ================================================================
     wire [7:0] rx_tdata;
     wire       rx_tvalid;
-    wire       rx_tready = !rx_has_data;  // ready when buffer empty
+    wire       rx_tready = !rx_has_data || data_rd;  // accept immediately on read-clear cycle
     wire       rx_fire   = rx_tvalid && rx_tready;
     reg [7:0]  rx_latch;
     reg        rx_has_data;
@@ -213,11 +239,11 @@ module i2c_peripheral (
         end else begin
             if (rx_fire) begin
                 rx_latch    <= rx_tdata;
-                rx_has_data <= 1'b1;
-            end
-            // Clear on MMIO read of I2C_DATA
-            if (data_rd && rx_has_data)
+                rx_has_data <= 1'b1;     // stays 1 if simultaneous read+new_data
+            end else if (data_rd && rx_has_data) begin
+                // Clear on MMIO read of I2C_DATA (only if no new rx_fire)
                 rx_has_data <= 1'b0;
+            end
         end
     end
 
@@ -268,7 +294,7 @@ module i2c_peripheral (
         .scl_i(scl_i),
         .scl_o(scl_o),
         .scl_t(scl_t),
-        .sda_i(sda_i),
+        .sda_i(sda_i_synced),
         .sda_o(sda_o),
         .sda_t(sda_t),
         // Status

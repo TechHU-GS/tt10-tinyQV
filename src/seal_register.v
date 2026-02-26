@@ -18,6 +18,8 @@
 //   → 2-bit read counter auto-increments, wraps after 3
 //   → commit forces read counter to 0
 
+`timescale 1ns / 1ps
+
 module seal_register (
     input         clk,
     input         rst_n,
@@ -233,5 +235,51 @@ module seal_register (
             endcase
         end
     end
+
+`ifdef FORMAL
+    reg f_past_valid;
+    initial f_past_valid = 0;
+    always @(posedge clk) f_past_valid <= 1;
+
+    // Constrain reset: must start in reset for at least 1 cycle
+    initial assume(!rst_n);
+
+    // P1: mono_count only changes by +1 (no skip, no decrease)
+    // Note: 32-bit overflow (0xFFFFFFFF→0) is a valid +1 wrap, not a bug.
+    // We prove the increment is always exactly +1, never +2 or -1.
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n))
+            assert(mono_count == $past(mono_count) || mono_count == $past(mono_count) + 1);
+
+    // P2: commit completion (S_LATCH→S_IDLE) increments mono_count by exactly 1
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n)
+            && $past(state) == S_LATCH && state == S_IDLE)
+            assert(mono_count == $past(mono_count) + 1);
+
+    // P3: non-commit cycles do NOT change mono_count
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n)
+            && !($past(state) == S_LATCH && state == S_IDLE))
+            assert(mono_count == $past(mono_count));
+
+    // P4: once session_locked, session_id is immutable
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n)
+            && $past(session_locked) && session_locked)
+            assert(session_id == $past(session_id));
+
+    // P5: session_locked is monotonic (once set, never cleared)
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n) && $past(session_locked))
+            assert(session_locked);
+
+    // P6: no software backdoor — MMIO writes (data_wr/ctrl_wr) in IDLE
+    //     cannot alter mono_count. Only the commit state machine can.
+    always @(posedge clk)
+        if (f_past_valid && rst_n && $past(rst_n)
+            && $past(state) == S_IDLE && state == S_IDLE)
+            assert(mono_count == $past(mono_count));
+`endif
 
 endmodule
