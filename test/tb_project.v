@@ -98,7 +98,11 @@ module tb_project;
         force dut.i_tinyqv.data_read_n  = tb_read_n;
         force dut.i_tinyqv.data_out     = 32'd0;
         #1; rd = int_read_data;
+        // Pulse read_complete — simulates CPU load-instruction completion.
+        // Required for read-side-effects (seal read_seq, i2c rx_has_data, uart rx).
+        force dut.i_tinyqv.data_read_complete = 1'b1;
         @(posedge clk);
+        force dut.i_tinyqv.data_read_complete = 1'b0;
         // Deassert read
         tb_read_n = 2'b11;
         force dut.i_tinyqv.data_read_n  = tb_read_n;
@@ -106,6 +110,7 @@ module tb_project;
         release dut.i_tinyqv.data_addr;
         release dut.i_tinyqv.data_write_n;
         release dut.i_tinyqv.data_read_n;
+        release dut.i_tinyqv.data_read_complete;
         release dut.i_tinyqv.data_out;
     end
     endtask
@@ -1251,6 +1256,442 @@ module tb_project;
         bus_read(5'hB);  // read0: value
         bus_read(5'hB);  // read1: {sid, mono[23:0]}
         check("G64: mono=0 after WDT reset", rd[23:0] === 24'd0);
+
+        // ============================================================
+        // GROUP 65-68: CRC Arbitration — Invisible Pollution Test
+        // Prove that Seal preemption leaves no residue in CPU CRC
+        // ============================================================
+
+        // GROUP 65: CPU feeds 3 bytes, then Seal preempts
+        $display(""); $display("--- G65: CRC Seal Preempt ---");
+        // CPU init CRC
+        bus_write(5'h2, {23'b0, 1'b1, 8'h00}); // init CRC
+        repeat(2) @(posedge clk);
+        // CPU feed 3 bytes: 0x11, 0x22, 0x33
+        // Golden: python3 -c "d=bytes([0x11,0x22,0x33]);c=0xFFFF
+        //   for b in d:
+        //     c^=b
+        //     for _ in range(8): c=(c>>1)^0xA001 if c&1 else c>>1
+        //   print(f'0x{c:04X}')"  → 0x7079
+        bus_write(5'h2, {23'b0, 1'b0, 8'h11}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h22}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h33}); repeat(12) @(posedge clk);
+        // Read CPU CRC = 0x7079
+        bus_read(5'h2);
+        check("G65: CPU CRC before seal = 0x7079", rd[15:0] === 16'h7079);
+        // Now trigger Seal commit → Seal takes over CRC engine
+        bus_write(5'hB, 32'hAAAA_BBBB); repeat(2) @(posedge clk);
+        bus_write(5'hE, {22'b0, 8'hCC, 1'b1, 1'b0}); // commit
+        // While seal is active, CPU CRC reads should show busy
+        repeat(5) @(posedge clk);
+        check("G65: seal active", int_seal_using === 1'b1);
+
+        // GROUP 66: CPU CRC reads busy during Seal
+        $display(""); $display("--- G66: CRC Busy During Seal ---");
+        bus_read(5'h2);
+        check("G66: CRC busy during seal", rd[16] === 1'b1);
+        // Wait for seal to complete
+        begin : g66_wait
+            integer t; t = 0;
+            while (int_seal_using && t < 5000) begin @(posedge clk); t = t + 1; end
+        end
+        check("G66: seal completed", int_seal_using === 1'b0);
+
+        // GROUP 67: After Seal, CPU re-init + same 3 bytes → CRC must match
+        // This is the CRITICAL test: proves no Seal data residue in CRC
+        $display(""); $display("--- G67: CRC No Seal Residue ---");
+        // CPU re-init CRC
+        bus_write(5'h2, {23'b0, 1'b1, 8'h00}); // init
+        repeat(2) @(posedge clk);
+        // Feed same 3 bytes: 0x11, 0x22, 0x33
+        bus_write(5'h2, {23'b0, 1'b0, 8'h11}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h22}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h33}); repeat(12) @(posedge clk);
+        bus_read(5'h2);
+        check("G67: CRC after seal = 0x7079 (no residue)", rd[15:0] === 16'h7079);
+
+        // GROUP 68: Partial CPU + Seal preempt + CPU re-init → still correct
+        $display(""); $display("--- G68: Partial CRC + Seal + Re-init ---");
+        // CPU partial: init + 1 byte only
+        bus_write(5'h2, {23'b0, 1'b1, 8'h00}); repeat(2) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'hFF}); repeat(12) @(posedge clk);
+        // Seal preempt
+        bus_write(5'hB, 32'h1234_5678); repeat(2) @(posedge clk);
+        bus_write(5'hE, {22'b0, 8'hDD, 1'b1, 1'b0});
+        begin : g68_wait
+            integer t; t = 0;
+            while (int_seal_using && t < 5000) begin @(posedge clk); t = t + 1; end
+        end
+        // CPU re-init and compute full 3-byte CRC
+        bus_write(5'h2, {23'b0, 1'b1, 8'h00}); repeat(2) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h11}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h22}); repeat(12) @(posedge clk);
+        bus_write(5'h2, {23'b0, 1'b0, 8'h33}); repeat(12) @(posedge clk);
+        bus_read(5'h2);
+        check("G68: CRC after partial+seal = 0x7079", rd[15:0] === 16'h7079);
+
+        // ============================================================
+        // GROUP 69-71: GPIO Bypass Robustness
+        // ============================================================
+
+        // GROUP 69: GPIO bypass mode — uo_out reflects gpio_out, then revert
+        $display(""); $display("--- G69: GPIO Bypass Round-Trip ---");
+        // Start clean: gpio_out_sel=0 (all peripheral), gpio_out=0
+        bus_write(5'h3, 32'h00);
+        bus_write(5'h0, 32'h00);
+        repeat(2) @(posedge clk);
+        // Record peripheral-driven uo_out baseline
+        begin : g69_block
+            reg [7:0] periph_baseline;
+            periph_baseline = uo_out;
+            // Set gpio_out to 0xA5
+            bus_write(5'h0, 32'hA5);
+            repeat(2) @(posedge clk);
+            // Enable ALL gpio bypass
+            bus_write(5'h3, 32'hFF);
+            repeat(2) @(posedge clk);
+            check("G69: bypass uo_out=0xA5", uo_out === 8'hA5);
+            // Readback gpio_out_sel via MMIO
+            bus_read(5'h3);
+            check("G69: gpio_out_sel readback=0xFF", rd[7:0] === 8'hFF);
+            // Disable bypass — back to peripheral mode
+            bus_write(5'h3, 32'h00);
+            repeat(2) @(posedge clk);
+            check("G69: revert to periph output", uo_out === periph_baseline);
+            // Verify gpio_out_sel cleared
+            bus_read(5'h3);
+            check("G69: gpio_out_sel readback=0x00", rd[7:0] === 8'h00);
+        end
+
+        // GROUP 70: Toggle gpio_out_sel during UART TX — no corruption
+        $display(""); $display("--- G70: GPIO Sel Toggle During UART TX ---");
+        // Start UART TX (write byte 0x55 to UART slot)
+        bus_write(5'h3, 32'h00);  // peripheral mode
+        repeat(2) @(posedge clk);
+        bus_write(5'h4, 32'h55);  // Start UART TX of 0x55
+        repeat(5) @(posedge clk);
+        // While UART is transmitting, toggle gpio_out_sel[0] (UART TX pin)
+        bus_write(5'h3, 32'h01);  // bit 0 = GPIO mode for UART TX pin
+        repeat(10) @(posedge clk);
+        bus_write(5'h3, 32'h00);  // back to peripheral mode
+        repeat(10) @(posedge clk);
+        // Verify UART is still alive (tx_busy or completed, no X)
+        bus_read(5'h5);  // UART_STATUS
+        check("G70: UART_STATUS no X after sel toggle", ^rd !== 1'bx);
+        // Verify system didn't crash
+        check("G70: system alive after sel toggle", int_rst_reg_n === 1'b1);
+        // Wait for UART TX to finish (115200 baud ≈ 2170 clk per byte)
+        repeat(3000) @(posedge clk);
+        bus_read(5'h5);
+        check("G70: UART TX completed", rd[0] === 1'b0);  // tx_busy=0
+
+        // GROUP 71: Write each individual gpio_out_sel bit pattern
+        $display(""); $display("--- G71: GPIO Sel Bit Patterns ---");
+        bus_write(5'h0, 32'hFF);  // gpio_out = all 1s
+        repeat(2) @(posedge clk);
+        begin : g71_block
+            integer bit_idx;
+            reg [7:0] sel_pattern;
+            reg ok;
+            ok = 1;
+            for (bit_idx = 0; bit_idx < 8; bit_idx = bit_idx + 1) begin
+                sel_pattern = (8'd1 << bit_idx);
+                bus_write(5'h3, {24'b0, sel_pattern});
+                repeat(2) @(posedge clk);
+                // The selected bit should be 1 (from gpio_out=0xFF)
+                if (uo_out[bit_idx] !== 1'b1) ok = 0;
+            end
+            check("G71: each sel bit drives gpio_out=1", ok === 1);
+            // Now gpio_out = 0x00, each sel bit should drive 0
+            bus_write(5'h0, 32'h00);
+            repeat(2) @(posedge clk);
+            ok = 1;
+            for (bit_idx = 0; bit_idx < 8; bit_idx = bit_idx + 1) begin
+                sel_pattern = (8'd1 << bit_idx);
+                bus_write(5'h3, {24'b0, sel_pattern});
+                repeat(2) @(posedge clk);
+                if (uo_out[bit_idx] !== 1'b0) ok = 0;
+            end
+            check("G71: each sel bit drives gpio_out=0", ok === 1);
+        end
+        // Cleanup
+        bus_write(5'h3, 32'h00);
+
+        // ============================================================
+        // GROUP 72-74: Soft Reset Extensions
+        // ============================================================
+
+        // GROUP 72: Two consecutive soft resets — system recovers
+        $display(""); $display("--- G72: Double Soft Reset ---");
+        bus_write(5'hC, 32'd8000);  // Load timer (canary)
+        repeat(2) @(posedge clk);
+        check("G72: timer pre-loaded", int_timer_count !== 32'd0);
+        // First soft reset
+        bus_write(5'hF, 32'hA5);
+        repeat(40) @(posedge clk);
+        check("G72: rst recovered after 1st reset", int_rst_reg_n === 1'b1);
+        check("G72: timer cleared after 1st reset", int_timer_count === 32'd0);
+        // Load state again
+        bus_write(5'hC, 32'd9000);
+        repeat(2) @(posedge clk);
+        check("G72: timer re-loaded", int_timer_count === 32'd9000);
+        // Second soft reset immediately
+        bus_write(5'hF, 32'hA5);
+        repeat(40) @(posedge clk);
+        check("G72: rst recovered after 2nd reset", int_rst_reg_n === 1'b1);
+        check("G72: timer cleared after 2nd reset", int_timer_count === 32'd0);
+        // Verify peripherals still work
+        bus_write(5'hA, 32'd42);
+        repeat(2) @(posedge clk);
+        bus_read(5'hA);
+        check("G72: RTC works after double reset", rd === 32'd42);
+
+        // GROUP 73: Wrong magic values must NOT trigger reset
+        $display(""); $display("--- G73: Wrong Magic No Reset ---");
+        bus_write(5'hC, 32'd7777);  // Canary
+        repeat(2) @(posedge clk);
+        // 0xA4 — off by one low
+        bus_write(5'hF, 32'hA4);
+        repeat(5) @(posedge clk);
+        check("G73: 0xA4 no reset (rst_reg_n=1)", int_rst_reg_n === 1'b1);
+        check("G73: 0xA4 timer survives", int_timer_count !== 32'd0);
+        // 0xA6 — off by one high
+        bus_write(5'hF, 32'hA6);
+        repeat(5) @(posedge clk);
+        check("G73: 0xA6 no reset", int_rst_reg_n === 1'b1);
+        // 0xFF — all ones
+        bus_write(5'hF, 32'hFF);
+        repeat(5) @(posedge clk);
+        check("G73: 0xFF no reset", int_rst_reg_n === 1'b1);
+        // 0x00 — all zeros
+        bus_write(5'hF, 32'h00);
+        repeat(5) @(posedge clk);
+        check("G73: 0x00 no reset", int_rst_reg_n === 1'b1);
+        // 0x5A — complement of 0xA5
+        bus_write(5'hF, 32'h5A);
+        repeat(5) @(posedge clk);
+        check("G73: 0x5A no reset", int_rst_reg_n === 1'b1);
+        // Verify timer still has value (no reset happened)
+        check("G73: timer still alive", int_timer_count !== 32'd0);
+        // Cleanup
+        bus_write(5'hC, 32'd0);
+
+        // GROUP 74: Soft reset clears seal mono_count
+        $display(""); $display("--- G74: Soft Reset Clears Seal Mono ---");
+        // Do a few seal commits to increment mono_count
+        bus_write(5'hB, 32'hAAAA_1111);
+        bus_write(5'hE, {22'b0, 8'h01, 1'b1, 1'b0});
+        begin : g74_wait1
+            integer t; t = 0;
+            while (dut.seal_ctrl_out[0] && t < 5000) begin @(posedge clk); t = t + 1; end
+        end
+        bus_write(5'hB, 32'hBBBB_2222);
+        bus_write(5'hE, {22'b0, 8'h02, 1'b1, 1'b0});
+        begin : g74_wait2
+            integer t; t = 0;
+            while (dut.seal_ctrl_out[0] && t < 5000) begin @(posedge clk); t = t + 1; end
+        end
+        // mono_count should be >= 2 now
+        // Trigger soft reset
+        bus_write(5'hF, 32'hA5);
+        repeat(40) @(posedge clk);
+        check("G74: rst recovered", int_rst_reg_n === 1'b1);
+        // Commit after reset — mono should be 0
+        bus_write(5'hB, 32'hCCCC_3333);
+        bus_write(5'hE, {22'b0, 8'h03, 1'b1, 1'b0});
+        begin : g74_wait3
+            integer t; t = 0;
+            while (dut.seal_ctrl_out[0] && t < 5000) begin @(posedge clk); t = t + 1; end
+        end
+        // Read sealed record: read0=value, read1={sid, mono[23:0]}
+        bus_read(5'hB);  // read0: value
+        bus_read(5'hB);  // read1: {sid, mono[23:0]}
+        check("G74: mono=0 after soft reset", rd[23:0] === 24'd0);
+
+        // ============================================================
+        // GROUP 75: WDT Survivability — latch_mem data after WDT reset
+        // ============================================================
+        // latch_mem uses latch_reg_n which has NO hardware reset.
+        // Data persists through WDT/soft reset because rstn only resets
+        // the cycle counter, not the latch contents.
+        // Test: write to latch_mem via bus, trigger WDT, verify data persists.
+        $display(""); $display("--- G75: Latch Mem WDT Survivability ---");
+        begin : g75_block
+            reg [31:0] lmem_readback;
+            // Write 0xDEAD_BEEF to latch_mem word 0 via bus
+            // addr[26]=1 selects latch_mem. addr[4:0] = byte address.
+            // For 32-bit write (write_n=2'b10), latch_mem needs 4 cycles.
+            tb_addr    = {2'b01, 21'b0, 5'b0};  // addr[26]=1, addr[4:0]=0
+            tb_write_n = 2'b10;  // 32-bit write
+            tb_read_n  = 2'b11;
+            tb_wdata   = 32'hDEAD_BEEF;
+            @(posedge clk);
+            force dut.i_tinyqv.data_addr    = tb_addr;
+            force dut.i_tinyqv.data_write_n = tb_write_n;
+            force dut.i_tinyqv.data_read_n  = tb_read_n;
+            force dut.i_tinyqv.data_out     = tb_wdata;
+            // Hold write for 4 cycles (cycle counter: 00→01→10→11)
+            repeat(4) @(posedge clk);
+            // Wait one more cycle for last byte to latch (falling edge)
+            @(posedge clk);
+            // Deassert write
+            tb_write_n = 2'b11;
+            force dut.i_tinyqv.data_write_n = tb_write_n;
+            @(posedge clk);
+            release dut.i_tinyqv.data_addr;
+            release dut.i_tinyqv.data_write_n;
+            release dut.i_tinyqv.data_read_n;
+            release dut.i_tinyqv.data_out;
+            repeat(2) @(posedge clk);
+            // Read back via bus
+            tb_addr    = {2'b01, 21'b0, 5'b0};
+            tb_write_n = 2'b11;
+            tb_read_n  = 2'b10;  // 32-bit read
+            @(posedge clk);
+            force dut.i_tinyqv.data_addr    = tb_addr;
+            force dut.i_tinyqv.data_write_n = tb_write_n;
+            force dut.i_tinyqv.data_read_n  = tb_read_n;
+            force dut.i_tinyqv.data_out     = 32'd0;
+            // Hold read for 4 cycles + 1 for data_out to assemble
+            repeat(5) @(posedge clk);
+            lmem_readback = dut.lmem_data_from_read;
+            tb_read_n = 2'b11;
+            force dut.i_tinyqv.data_read_n  = tb_read_n;
+            @(posedge clk);
+            release dut.i_tinyqv.data_addr;
+            release dut.i_tinyqv.data_write_n;
+            release dut.i_tinyqv.data_read_n;
+            release dut.i_tinyqv.data_out;
+            check("G75: latch_mem pre-WDT=0xDEADBEEF", lmem_readback === 32'hDEAD_BEEF);
+
+            // Now trigger WDT reset
+            bus_write(5'hD, 32'd2);  // 2µs timeout
+            repeat(200) @(posedge clk);  // Wait for WDT expiry
+            repeat(50) @(posedge clk);   // Wait for reset hold to complete
+            check("G75: system recovered from WDT", int_rst_reg_n === 1'b1);
+            // Also verify normal MMIO peripherals DID reset
+            check("G75: timer cleared (MMIO reset)", int_timer_count === 32'd0);
+            check("G75: gpio_out cleared (MMIO reset)", dut.gpio_out === 8'd0);
+
+            // Read latch_mem again — data should PERSIST (no hardware reset on latches)
+            tb_addr    = {2'b01, 21'b0, 5'b0};
+            tb_write_n = 2'b11;
+            tb_read_n  = 2'b10;
+            @(posedge clk);
+            force dut.i_tinyqv.data_addr    = tb_addr;
+            force dut.i_tinyqv.data_write_n = tb_write_n;
+            force dut.i_tinyqv.data_read_n  = tb_read_n;
+            force dut.i_tinyqv.data_out     = 32'd0;
+            repeat(5) @(posedge clk);
+            lmem_readback = dut.lmem_data_from_read;
+            tb_read_n = 2'b11;
+            force dut.i_tinyqv.data_read_n  = tb_read_n;
+            @(posedge clk);
+            release dut.i_tinyqv.data_addr;
+            release dut.i_tinyqv.data_write_n;
+            release dut.i_tinyqv.data_read_n;
+            release dut.i_tinyqv.data_out;
+            // latch_reg_n has NO reset — data persists through WDT reset
+            check("G75: latch_mem persists after WDT", lmem_readback === 32'hDEAD_BEEF);
+        end
+
+        // ============================================================
+        // GROUP 76-80: SPI Peripheral Path Verification
+        // Validates project.v address decode, spi_ctrl wiring, GPIO mux
+        // ============================================================
+
+        // GROUP 76: SPI idle state — CS high, SCK low, busy=0
+        $display(""); $display("--- G76: SPI Idle State ---");
+        // Ensure gpio_out_sel bits 3-5 are 0 (SPI pins not bypassed)
+        bus_write(5'h3, 32'h00);
+        repeat(2) @(posedge clk);
+        check("G76: SPI CS idle high", uo_out[4] === 1'b1);
+        check("G76: SPI SCK idle low", uo_out[5] === 1'b0);
+        bus_read(5'h9);  // PERI_SPI_STATUS
+        check("G76: SPI not busy", rd[0] === 1'b0);
+
+        // GROUP 77: SPI config + single byte TX — verify CS/SCK/MOSI
+        $display(""); $display("--- G77: SPI TX Byte ---");
+        // Set divider=1 (SCK = clk/4) for easier cycle counting
+        bus_write(5'h9, 32'h0000_0001);
+        repeat(2) @(posedge clk);
+        // Send byte 0xA5, end_txn=1 (release CS after)
+        bus_write(5'h8, {22'b0, 1'b0, 1'b1, 8'hA5});
+        repeat(2) @(posedge clk);
+        // SPI should now be busy, CS should be low
+        check("G77: SPI busy after write", dut.spi_busy === 1'b1);
+        check("G77: CS low during TX", uo_out[4] === 1'b0);
+        // Wait for SPI to complete (8 bits * 2 half-clocks * (div+1=2) = 32 clk + margin)
+        begin : g77_spi_wait
+            integer t; t = 0;
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+            check("G77: SPI completed", dut.spi_busy === 1'b0);
+        end
+        // After end_txn=1, CS should return high
+        repeat(2) @(posedge clk);
+        check("G77: CS high after end_txn", uo_out[4] === 1'b1);
+        check("G77: SCK idle after TX", uo_out[5] === 1'b0);
+
+        // GROUP 78: SPI MISO → read path
+        $display(""); $display("--- G78: SPI MISO Read ---");
+        // Drive MISO=1 (ui_in[2]) throughout transfer → should read 0xFF
+        ui_in[2] = 1'b1;
+        bus_write(5'h8, {22'b0, 1'b0, 1'b1, 8'h00});  // send 0x00, end_txn=1
+        begin : g78_wait
+            integer t; t = 0;
+            repeat(2) @(posedge clk);
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+        end
+        repeat(2) @(posedge clk);
+        bus_read(5'h8);  // PERI_SPI read
+        check("G78: MISO=1 reads 0xFF", rd[7:0] === 8'hFF);
+        // Now with MISO=0
+        ui_in[2] = 1'b0;
+        bus_write(5'h8, {22'b0, 1'b0, 1'b1, 8'h00});
+        begin : g78_wait2
+            integer t; t = 0;
+            repeat(2) @(posedge clk);
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+        end
+        repeat(2) @(posedge clk);
+        bus_read(5'h8);
+        check("G78: MISO=0 reads 0x00", rd[7:0] === 8'h00);
+        ui_in[2] = 1'b0;  // restore
+
+        // GROUP 79: SPI back-to-back without end_txn — CS stays low
+        $display(""); $display("--- G79: SPI B2B No End ---");
+        // First byte: end_txn=0 (keep CS asserted)
+        bus_write(5'h8, {22'b0, 1'b0, 1'b0, 8'h55});
+        begin : g79_wait1
+            integer t; t = 0;
+            repeat(2) @(posedge clk);
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+        end
+        repeat(2) @(posedge clk);
+        check("G79: CS stays low after no end_txn", uo_out[4] === 1'b0);
+        // Second byte: end_txn=1 (release CS)
+        bus_write(5'h8, {22'b0, 1'b0, 1'b1, 8'hAA});
+        begin : g79_wait2
+            integer t; t = 0;
+            repeat(2) @(posedge clk);
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+        end
+        repeat(2) @(posedge clk);
+        check("G79: CS high after end_txn=1", uo_out[4] === 1'b1);
+
+        // GROUP 80: SPI busy read via bus during transfer
+        $display(""); $display("--- G80: SPI Busy Status ---");
+        bus_write(5'h8, {22'b0, 1'b0, 1'b1, 8'hFF});
+        repeat(3) @(posedge clk);  // should still be busy
+        bus_read(5'h9);
+        check("G80: SPI_STATUS busy=1 mid-transfer", rd[0] === 1'b1);
+        begin : g80_wait
+            integer t; t = 0;
+            while (dut.spi_busy && t < 200) begin @(posedge clk); t = t + 1; end
+        end
+        repeat(2) @(posedge clk);
+        bus_read(5'h9);
+        check("G80: SPI_STATUS busy=0 after complete", rd[0] === 1'b0);
 
         // ============================================================
         $display("");

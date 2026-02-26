@@ -123,6 +123,15 @@ module tb_seal;
     // Variables for read results
     reg [31:0] rd0, rd1, rd2;
 
+    // Golden vector storage: {sensor_id[7:0], value[31:0], crc[15:0]} = 56 bits
+    reg [55:0] golden_mem [0:99];
+    integer gv_i;
+    reg [7:0]  gv_sid;
+    reg [31:0] gv_val;
+    reg [15:0] gv_expected_crc;
+    reg [15:0] gv_actual_crc;
+    integer gv_pass, gv_fail;
+
     // CRC16-CCITT reference (polynomial 0x8005, init 0xFFFF)
     // We'll verify by computing CRC of same bytes via the engine
     reg [15:0] expected_crc;
@@ -752,6 +761,55 @@ module tb_seal;
         rd0 = data_out;
         check("normal after FSM recovery", rd0 == 32'hDEAD_BEEF);
 
+        // --- Test 23: 100 CRC16-MODBUS golden vectors ---
+        $display("--- Test 23: 100 CRC16 golden vectors ---");
+
+        // Reset DUT so mono_count starts at 0
+        rst_n = 0;
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        session_ctr_in = 8'hCC;  // any value, we don't check session here
+        repeat(5) @(posedge clk);
+
+        // Load golden vectors from file
+        $readmemh("seal_golden.mem", golden_mem);
+
+        gv_pass = 0;
+        gv_fail = 0;
+
+        for (gv_i = 0; gv_i < 100; gv_i = gv_i + 1) begin
+            // Unpack: {sensor_id[7:0], value[31:0], crc[15:0]}
+            gv_sid          = golden_mem[gv_i][55:48];
+            gv_val          = golden_mem[gv_i][47:16];
+            gv_expected_crc = golden_mem[gv_i][15:0];
+
+            // Write value
+            seal_write_data(gv_val);
+            // Commit with sensor_id (mono_count = gv_i, auto-incremented by DUT)
+            seal_write_ctrl({gv_sid, 1'b1, 1'b0});
+            wait_seal_done;
+
+            // Read sequence: skip read0 (value), skip read1 (sid+mono), get read2 (mono_hi+crc+pad)
+            seal_read_data; repeat(2) @(posedge clk);  // advance past read0
+            seal_read_data; repeat(2) @(posedge clk);  // advance past read1
+            gv_actual_crc = data_out[23:8];
+
+            total_tests = total_tests + 1;
+            if (gv_actual_crc == gv_expected_crc) begin
+                gv_pass = gv_pass + 1;
+                pass_count = pass_count + 1;
+            end else begin
+                gv_fail = gv_fail + 1;
+                fail_count = fail_count + 1;
+                $display("[FAIL] GV[%0d] sid=0x%02X val=0x%08X mono=%0d: CRC got=0x%04X exp=0x%04X",
+                         gv_i, gv_sid, gv_val, gv_i, gv_actual_crc, gv_expected_crc);
+            end
+        end
+
+        $display("[GOLDEN] %0d / 100 PASS, %0d FAIL", gv_pass, gv_fail);
+        if (gv_pass == 100)
+            $display("[PASS] All 100 golden vectors match");
+
         // ================================================================
         // Summary
         // ================================================================
@@ -763,9 +821,9 @@ module tb_seal;
         $finish;
     end
 
-    // Timeout
+    // Timeout (increased for 100 golden vectors)
     initial begin
-        #10_000_000;
+        #50_000_000;
         $display("TIMEOUT!");
         $finish;
     end
