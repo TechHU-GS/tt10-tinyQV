@@ -1,0 +1,28 @@
+`verilator_config
+// Convention: all own RTL files must include `timescale 1ns / 1ps
+
+// ============================================================================
+// Third-party: Forencich i2c_master (verilog-i2c, MIT license)
+// Width warnings are inherent to the design (prescale 16→17 bit delay reg)
+// ============================================================================
+lint_off -rule WIDTHEXPAND    -file "*/i2c_master.v"
+lint_off -rule WIDTHTRUNC     -file "*/i2c_master.v"
+lint_off -rule TIMESCALEMOD   -file "*/i2c_master.v"
+
+// ============================================================================
+// Third-party: TinyQV (Michael Bell, Apache-2.0)
+// DECLFILENAME: module names don't match filenames (upstream convention)
+// MULTITOP: multiple top-level modules from separate .v files
+// TIMESCALEMOD: mixed timescale presence
+// ============================================================================
+lint_off -rule DECLFILENAME   -file "*/tinyQV/*"
+lint_off -rule MULTITOP       -file "*/tinyQV/*"
+lint_off -rule TIMESCALEMOD   -file "*/tinyQV/*"
+
+// ============================================================================
+// Own: project.v module name is tt_um_MichaelBell_tinyQV (TTIHP template)
+// Unconnected pins are intentional (single-master I2C, repurposed pins)
+// ============================================================================
+lint_off -rule DECLFILENAME     -file "*/project.v"
+lint_off -rule PINCONNECTEMPTY  -file "*/project.v"
+lint_off -rule PINCONNECTEMPTY  -file "*/i2c_peripheral.v"

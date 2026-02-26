@@ -9,9 +9,93 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install iverilog
+      - name: Install tools
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y iverilog
+        run: |
+          sudo apt-get update && sudo apt-get install -y iverilog verilator yosys
+          echo "--- Tool versions ---"
+          iverilog -V 2>&1 | head -1
+          verilator --version
+          yosys -V
+
+      - name: Timescale header check (own modules)
+        shell: bash
+        run: |
+          FAIL=0
+          for f in \
+            src/project.v src/latch_mem.v src/crc16_engine.v \
+            src/crc16_peripheral.v src/seal_register.v src/watchdog.v \
+            src/rtc_counter.v src/i2c_peripheral.v; do
+            if ! head -20 "$f" | grep -q '`timescale'; then
+              echo "MISSING timescale: $f"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] && echo "All own modules have timescale directive"
+          [ "$FAIL" -eq 0 ]
+
+      - name: Verilator lint (0 warnings)
+        shell: bash
+        run: |
+          verilator --lint-only --timing -DSIM -Wall \
+            src/lint.vlt \
+            src/project.v src/latch_mem.v src/crc16_engine.v src/crc16_peripheral.v \
+            src/seal_register.v src/watchdog.v src/rtc_counter.v \
+            src/i2c_master.v src/i2c_peripheral.v \
+            src/tinyQV/cpu/*.v src/tinyQV/peri/*/*.v 2>&1 | tee /tmp/lint.txt
+          ! grep -q '%Warning' /tmp/lint.txt
+
+      - name: Yosys synth check (own modules)
+        shell: bash
+        run: |
+          set -e
+          for spec in \
+            "crc16_engine:src/crc16_engine.v" \
+            "crc16_peripheral:src/crc16_peripheral.v" \
+            "seal_register:src/seal_register.v src/crc16_engine.v" \
+            "watchdog:src/watchdog.v" \
+            "rtc_counter:src/rtc_counter.v" \
+            "i2c_peripheral:src/i2c_peripheral.v src/i2c_master.v" \
+            "latch_mem:src/latch_mem.v src/tinyQV/cpu/latch_reg.v"; do
+            top="${spec%%:*}"
+            files="${spec#*:}"
+            echo "--- synth check: $top ---"
+            yosys -p "read_verilog -DSIM $files; synth -top $top; check" 2>&1 \
+              | tee /tmp/yosys_${top}.txt
+            grep -q "Found and reported 0 problems" /tmp/yosys_${top}.txt
+          done
+
+      - name: Run tb_project bus-level test (218 checks)
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_project.vvp \
+            -I../src -I../src/tinyQV/cpu \
+            -I../src/tinyQV/peri/pwm -I../src/tinyQV/peri/spi \
+            -I../src/tinyQV/peri/ttgame -I../src/tinyQV/peri/uart \
+            tb_project.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/*.v \
+            ../src/tinyQV/peri/pwm/pwm.v ../src/tinyQV/peri/spi/spi.v \
+            ../src/tinyQV/peri/ttgame/ttgame.v \
+            ../src/tinyQV/peri/uart/uart_rx.v ../src/tinyQV/peri/uart/uart_tx.v
+          timeout 120 vvp tb_project.vvp > project_result.txt 2>&1 || true
+          cat project_result.txt
+          grep -q "ALL TESTS PASSED" project_result.txt
+
+      - name: Run RTC unit test
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_rtc.vvp \
+            tb_rtc.v ../src/rtc_counter.v
+          vvp tb_rtc.vvp > rtc_result.txt 2>&1 || true
+          cat rtc_result.txt
+          grep -q "ALL TESTS PASSED" rtc_result.txt
 
       - name: Run CRC16 unit test
         shell: bash
@@ -118,6 +202,182 @@ jobs:
           timeout 120 vvp tb_read_clear_regression.vvp > regression_result.txt 2>&1 || true
           cat regression_result.txt
           grep -q "ALL TESTS PASSED" regression_result.txt
+
+      - name: "Test A: Timer IRQ17"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_irq_timer.vvp \
+            tb_irq_timer.v qspi_flash_model.v qspi_psram_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_irq_timer.vvp > irq_timer_result.txt 2>&1 || true
+          cat irq_timer_result.txt
+          grep -q "ALL TESTS PASSED" irq_timer_result.txt
+
+      - name: "Test B: WDT Reboot"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_wdt_reboot.vvp \
+            tb_wdt_reboot.v qspi_flash_model.v qspi_psram_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_wdt_reboot.vvp > wdt_reboot_result.txt 2>&1 || true
+          cat wdt_reboot_result.txt
+          grep -q "ALL TESTS PASSED" wdt_reboot_result.txt
+
+      - name: "Test C: Soft Reset"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_soft_reset.vvp \
+            tb_soft_reset.v qspi_flash_model.v qspi_psram_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_soft_reset.vvp > soft_reset_result.txt 2>&1 || true
+          cat soft_reset_result.txt
+          grep -q "ALL TESTS PASSED" soft_reset_result.txt
+
+      - name: "Test D: I2C Back-to-Back"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_i2c_stress.vvp \
+            tb_i2c_stress.v qspi_flash_model.v qspi_psram_model.v i2c_slave_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_i2c_stress.vvp > i2c_stress_result.txt 2>&1 || true
+          cat i2c_stress_result.txt
+          grep -q "ALL TESTS PASSED" i2c_stress_result.txt
+
+      - name: "Test E: CRC Arbitration"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_crc_arb.vvp \
+            tb_crc_arb.v qspi_flash_model.v qspi_psram_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_crc_arb.vvp > crc_arb_result.txt 2>&1 || true
+          cat crc_arb_result.txt
+          grep -q "ALL TESTS PASSED" crc_arb_result.txt
+
+      - name: "Test F: Timer Edge Cases"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_timer_edge.vvp \
+            tb_timer_edge.v qspi_flash_model.v qspi_psram_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_timer_edge.vvp > timer_edge_result.txt 2>&1 || true
+          cat timer_edge_result.txt
+          grep -q "ALL TESTS PASSED" timer_edge_result.txt
+
+      - name: "Test G: I2C NACK"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_i2c_nack.vvp \
+            tb_i2c_nack.v qspi_flash_model.v qspi_psram_model.v i2c_slave_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_i2c_nack.vvp > i2c_nack_result.txt 2>&1 || true
+          cat i2c_nack_result.txt
+          grep -q "ALL TESTS PASSED" i2c_nack_result.txt
+
+      - name: "Test H: Concurrent Operations"
+        shell: bash
+        run: |
+          cd test
+          iverilog -g2012 -DSIM -o tb_concurrent.vvp \
+            tb_concurrent.v qspi_flash_model.v qspi_psram_model.v i2c_slave_model.v \
+            ../src/project.v ../src/latch_mem.v \
+            ../src/crc16_engine.v ../src/crc16_peripheral.v \
+            ../src/seal_register.v \
+            ../src/i2c_master.v ../src/i2c_peripheral.v \
+            ../src/watchdog.v ../src/rtc_counter.v \
+            ../src/tinyQV/cpu/tinyqv.v ../src/tinyQV/cpu/alu.v \
+            ../src/tinyQV/cpu/core.v ../src/tinyQV/cpu/counter.v \
+            ../src/tinyQV/cpu/cpu.v ../src/tinyQV/cpu/decode.v \
+            ../src/tinyQV/cpu/mem_ctrl.v ../src/tinyQV/cpu/qspi_ctrl.v \
+            ../src/tinyQV/cpu/register.v ../src/tinyQV/cpu/latch_reg.v \
+            ../src/tinyQV/peri/uart/uart_tx.v ../src/tinyQV/peri/uart/uart_rx.v \
+            ../src/tinyQV/peri/spi/spi.v
+          timeout 120 vvp tb_concurrent.vvp > concurrent_result.txt 2>&1 || true
+          cat concurrent_result.txt
+          grep -q "ALL TESTS PASSED" concurrent_result.txt
 
       - name: Upload test results
         if: always()

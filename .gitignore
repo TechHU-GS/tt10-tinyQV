@@ -3,7 +3,6 @@
 .vscode
 *.vcd
 *.vvp
-*.hex
 *.elf
 runs
 src/user_config.json
@@ -18,4 +17,7 @@ test/gate_level_netlist.v
 *.log
 *.uf2
 gds_render_preview*
+obj_dir/
+verify/*_bmc/
+verify/*_prove/
 output/
