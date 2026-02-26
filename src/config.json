@@ -3,7 +3,7 @@
   "//": "Based on MichaelBell/ttihp25b-tinyQV config (proven on IHP shuttle)",
 
   "//": "PL_TARGET_DENSITY_PCT - 66% balances placement vs hold buffer headroom (63%→GPL-0302, 68%→DPL-0036)",
-  "PL_TARGET_DENSITY_PCT": 66,
+  "PL_TARGET_DENSITY_PCT": 66.5,
 
   "//": "CLOCK_PERIOD - 25MHz = 40ns",
   "CLOCK_PERIOD": 40,
@@ -22,7 +22,7 @@
   "RUN_LINTER": 1,
   "LINTER_INCLUDE_PDK_MODELS": 1,
 
-  "//": "Antenna fixing - limit iterations (MichaelBell: excessive diodes otherwise)",
+  "//": "Antenna - ITERS=1 deterministic, default ITERS=3 non-deterministic (may GPL-0302)",
   "GRT_ANTENNA_ITERS": 1,
   "GRT_ANTENNA_MARGIN": 15,
 
