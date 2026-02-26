@@ -30,8 +30,8 @@ VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_f
 
 NL ?= placement
 
-#VERILOG_SOURCES += ../runs/wokwi/results/synthesis/tt_um_MichaelBell_tinyQV.v
-VERILOG_SOURCES += ../runs/wokwi/results/$(NL)/tt_um_MichaelBell_tinyQV.nl.v
+#VERILOG_SOURCES += ../runs/wokwi/results/synthesis/tt_um_techhu_rv32_trial.v
+VERILOG_SOURCES += ../runs/wokwi/results/$(NL)/tt_um_techhu_rv32_trial.nl.v
 
 endif
 
@@ -48,7 +48,7 @@ VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitiv
 VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
 
 # this gets copied in by the GDS action workflow
-#VERILOG_SOURCES += ../runs/wokwi/results/placement/tt_um_MichaelBell_tinyQV.pnl.v
+#VERILOG_SOURCES += ../runs/wokwi/results/placement/tt_um_techhu_rv32_trial.pnl.v
 VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 
 endif

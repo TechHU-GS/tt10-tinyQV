@@ -26,6 +26,9 @@
   "GRT_ANTENNA_ITERS": 1,
   "GRT_ANTENNA_MARGIN": 15,
 
+  "//": "SDC timing constraints (duty cycle uncertainty, I/O delays, SPI clock)",
+  "FALLBACK_SDC_FILE": "dir::base.sdc",
+
   "//": "Clock",
   "CLOCK_PORT": "clk",
 
@@ -62,9 +65,8 @@
   "//": "Clock",
   "RUN_CTS": 1,
 
-  "//": "Don't use power rings or TopMetal layers",
+  "//": "Don't use power rings (RT_MAX_LAYER auto-set to TopMetal1 by tt-support-tools)",
   "FP_PDN_MULTILAYER": 0,
-  "RT_MAX_LAYER": "Metal5",
 
   "//": "MAGIC_DEF_LABELS may cause issues with LVS",
   "MAGIC_DEF_LABELS": 0,

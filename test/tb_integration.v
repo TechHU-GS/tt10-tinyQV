@@ -32,7 +32,7 @@ module tb_integration;
     reg  [7:0] uio_in;
 
     // DUT
-    tt_um_MichaelBell_tinyQV dut (
+    tt_um_techhu_rv32_trial dut (
         .ui_in  (ui_in),
         .uo_out (uo_out),
         .uio_in (uio_in),

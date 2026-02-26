@@ -11,7 +11,7 @@
 `default_nettype none
 `timescale 1ns / 1ps
 
-module tt_um_MichaelBell_tinyQV (
+module tt_um_techhu_rv32_trial (
     input  wire [7:0] ui_in,    // Dedicated inputs
     output wire [7:0] uo_out,   // Dedicated outputs
     input  wire [7:0] uio_in,   // IOs: Input path

@@ -1,7 +1,7 @@
 // ============================================================================
 // cov_project_wrap.v — Verilator coverage wrapper for full SoC
 // ============================================================================
-// Instantiates tt_um_MichaelBell_tinyQV (DUT) + synchronous flash/PSRAM/I2C
+// Instantiates tt_um_techhu_rv32_trial (DUT) + synchronous flash/PSRAM/I2C
 // models. Uses sys_clk edge detection to avoid Verilator derived-clock issues.
 // ============================================================================
 
@@ -21,7 +21,7 @@ module cov_project_wrap (
     reg  [7:0] uio_in;
 
     // DUT
-    tt_um_MichaelBell_tinyQV dut (
+    tt_um_techhu_rv32_trial dut (
         .ui_in  (ui_in),
         .uo_out (uo_out),
         .uio_in (uio_in),

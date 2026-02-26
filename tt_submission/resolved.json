@@ -127,7 +127,7 @@
     "DIODE_CELL": "sky130_fd_sc_hd__diode_2/DIODE",
     "DESIGN_DIR": "/home/mdb36/tt/tt10-tinyQV/src",
     "PDK_ROOT": "/home/mdb36/tt/pdk/volare/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af",
-    "DESIGN_NAME": "tt_um_MichaelBell_tinyQV",
+    "DESIGN_NAME": "tt_um_techhu_rv32_trial",
     "PDK": "sky130A",
     "CLOCK_PERIOD": 12.5,
     "CLOCK_PORT": "clk",

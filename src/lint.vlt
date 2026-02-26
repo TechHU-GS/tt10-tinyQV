@@ -20,7 +20,7 @@ lint_off -rule MULTITOP       -file "*/tinyQV/*"
 lint_off -rule TIMESCALEMOD   -file "*/tinyQV/*"
 
 // ============================================================================
-// Own: project.v module name is tt_um_MichaelBell_tinyQV (TTIHP template)
+// Own: project.v module name is tt_um_techhu_rv32_trial (TTIHP template)
 // Unconnected pins are intentional (single-master I2C, repurposed pins)
 // ============================================================================
 lint_off -rule DECLFILENAME     -file "*/project.v"
