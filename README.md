@@ -1,48 +1,37 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# TinyQV - A Risc-V SoC for Tiny Tapeout
+# LoRa Edge SoC
 
-- [Documentation for project](docs/info.md)
-- [More details about tinyQV](https://github.com/MichaelBell/tinyQV)
-- [tinyQV-sdk for building tinyQV programs](https://github.com/MichaelBell/tinyQV-sdk)
-- [Example tinyQV programs](https://github.com/MichaelBell/tinyQV-projects)
+A RISC-V IoT SoC targeting TTIHP 26a (IHP SG13G2 130nm), built for LoRa edge node applications.
 
-# Tiny Tapeout Verilog Project Template
+## Architecture
 
-- [Read the documentation for project](docs/info.md)
+Based on [MichaelBell/tinyQV](https://github.com/MichaelBell/tinyQV) (RV32EC @ 25MHz, 4-bit serial datapath), extended with 8 custom peripherals:
 
-## What is Tiny Tapeout?
+| Peripheral | Description |
+|------------|-------------|
+| CRC16 | Hardware CRC16-CCITT engine with byte-level feed |
+| I2C Master | Full I2C master (Forencich AXI-Stream core + bridge) |
+| Watchdog | Hardware WDT with configurable timeout + reboot |
+| RTC | 32-bit real-time counter with 1PPS sync |
+| Timer | Countdown timer with IRQ |
+| Seal Register | Cryptographic integrity watermark with monotonic counter |
+| SysInfo | Chip ID, build info, session counter |
+| Latch Memory | 256-byte scratchpad (latch-based SRAM alternative) |
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## Key Specs
 
-To learn more and get started, visit https://tinytapeout.com.
+- **Process**: IHP SG13G2 130nm (TTIHP 26a shuttle)
+- **Tile size**: 4x2 (854 x 314 um)
+- **Clock**: 25MHz
+- **ISA**: RV32EC + Zcb + Zicond
+- **Memory**: External QSPI Flash (code) + QSPI PSRAM (data)
+- **I/O**: UART, SPI, I2C, GPIO, SX1268 LoRa interface
 
-## Set up your Verilog project
+## Documentation
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+- [Detailed datasheet (register map, pinout, how to test)](docs/info.md)
 
-The GitHub action will automatically build the ASIC files using [OpenLane](https://www.zerotoasiccourse.com/terminology/openlane/).
+## Credits
 
-## Enable GitHub actions to build the results page
-
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
-
-## Resources
-
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
-
-## What next?
-
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
+CPU core: [tinyQV](https://github.com/MichaelBell/tinyQV) by Michael Bell, originally designed for TT10.
