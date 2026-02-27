@@ -253,7 +253,12 @@ async def expect_store(dut, addr, bytes=4):
                 assert select.value == 0
                 assert dut.qspi_clk_out.value == 1
                 assert dut.qspi_data_oe.value == 0xF
-                val |= dut.qspi_data_out.value << (nibble_shift_order[j])
+                try:
+                    nibble = int(dut.qspi_data_out.value)
+                except (ValueError, TypeError):
+                    s = str(dut.qspi_data_out.value).replace("x","0").replace("z","0").replace("X","0").replace("Z","0")
+                    nibble = int(s, 2)
+                val |= nibble << (nibble_shift_order[j])
                 await ClockCycles(dut.clk, 1, False)
                 assert select.value == (1 if j == bytes*2-1 else 0)
                 assert dut.qspi_clk_out.value == 0

@@ -45,6 +45,9 @@ void __attribute__((naked, section(".text._vectors"))) _vectors(void) {
 
 // ============================================================================
 // Trap handler (should never fire in this test)
+// TODO: Production firmware should trigger WDT reboot instead of infinite loop.
+//       Dead loop = device permanently hung if trap fires in the field.
+//       Fix: write non-zero to PERI_WDT (0x8000034) then loop until reset.
 // ============================================================================
 void __attribute__((naked)) _trap_handler(void) {
     __asm__ volatile (

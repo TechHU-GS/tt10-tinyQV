@@ -43,6 +43,8 @@ void __attribute__((naked, section(".text._vectors"))) _vectors(void) {
     );
 }
 
+// TODO: Production firmware should trigger WDT reboot instead of infinite loop.
+//       Fix: write non-zero to PERI_WDT (0x8000034) then loop until reset.
 void __attribute__((naked)) _trap_handler(void) {
     __asm__ volatile ("j _trap_handler\n");
 }
