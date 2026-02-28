@@ -21,3 +21,23 @@ obj_dir/
 verify/*_bmc/
 verify/*_prove/
 output/
+
+# Build artifacts — large / regenerable
+tt_submission/*.gds
+tt_submission/*.spef
+tt_submission/*.lef
+tt_submission/*.v
+coverage.dat
+verify/coverage.dat
+verify/obj_project/
+verify/ann_project/
+verify/ann_project_v2/
+verify/*_netlist.json
+verify/*_report.json
+verify/ecp5_out.config
+verify/ice40_out.asc
+verify/*_formal/status.sqlite
+verify/fw_post.hex
+tb/verilator/obj_dir/
+tb/formal/*_bmc/
+tb/formal/seal_mono/
