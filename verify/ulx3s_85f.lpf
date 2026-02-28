@@ -1,0 +1,105 @@
+# ULX3S 85F minimal constraints for LoRa Edge SoC validation
+# Only clock + basic I/O mapping for PnR feasibility check
+
+# 25 MHz clock (active-low reset style, directly wired)
+LOCATE COMP "clk"    SITE "G2";
+IOBUF  PORT "clk"    PULLMODE=NONE IO_TYPE=LVCMOS33;
+FREQUENCY PORT "clk" 25.0 MHz;
+
+# Active-low reset → Button 0
+LOCATE COMP "rst_n"  SITE "D6";
+IOBUF  PORT "rst_n"  PULLMODE=UP IO_TYPE=LVCMOS33;
+
+# ena tied high externally (directly to VCC in wrapper, or assign to a pin)
+LOCATE COMP "ena"    SITE "R1";
+IOBUF  PORT "ena"    PULLMODE=UP IO_TYPE=LVCMOS33;
+
+# ui_in[7:0] → GPIO header J1 pins
+LOCATE COMP "ui_in[0]" SITE "B11";
+LOCATE COMP "ui_in[1]" SITE "A10";
+LOCATE COMP "ui_in[2]" SITE "A9";
+LOCATE COMP "ui_in[3]" SITE "B9";
+LOCATE COMP "ui_in[4]" SITE "A7";
+LOCATE COMP "ui_in[5]" SITE "A6";
+LOCATE COMP "ui_in[6]" SITE "A5";
+LOCATE COMP "ui_in[7]" SITE "A4";
+IOBUF  PORT "ui_in[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[7]" IO_TYPE=LVCMOS33;
+
+# uo_out[7:0] → GPIO header J1 pins (continued)
+LOCATE COMP "uo_out[0]" SITE "A3";
+LOCATE COMP "uo_out[1]" SITE "B3";
+LOCATE COMP "uo_out[2]" SITE "A2";
+LOCATE COMP "uo_out[3]" SITE "B2";
+LOCATE COMP "uo_out[4]" SITE "A1";
+LOCATE COMP "uo_out[5]" SITE "C1";
+LOCATE COMP "uo_out[6]" SITE "D1";
+LOCATE COMP "uo_out[7]" SITE "E1";
+IOBUF  PORT "uo_out[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[7]" IO_TYPE=LVCMOS33;
+
+# uio_in[7:0] → GPIO header J2 pins
+LOCATE COMP "uio_in[0]" SITE "F1";
+LOCATE COMP "uio_in[1]" SITE "G1";
+LOCATE COMP "uio_in[2]" SITE "H2";
+LOCATE COMP "uio_in[3]" SITE "J1";
+LOCATE COMP "uio_in[4]" SITE "K1";
+LOCATE COMP "uio_in[5]" SITE "L1";
+LOCATE COMP "uio_in[6]" SITE "M1";
+LOCATE COMP "uio_in[7]" SITE "N2";
+IOBUF  PORT "uio_in[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[7]" IO_TYPE=LVCMOS33;
+
+# uio_out[7:0] → GPIO header J2 pins (continued)
+LOCATE COMP "uio_out[0]" SITE "P2";
+LOCATE COMP "uio_out[1]" SITE "R3";
+LOCATE COMP "uio_out[2]" SITE "T3";
+LOCATE COMP "uio_out[3]" SITE "R4";
+LOCATE COMP "uio_out[4]" SITE "P4";
+LOCATE COMP "uio_out[5]" SITE "N3";
+LOCATE COMP "uio_out[6]" SITE "M3";
+LOCATE COMP "uio_out[7]" SITE "L3";
+IOBUF  PORT "uio_out[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[7]" IO_TYPE=LVCMOS33;
+
+# uio_oe[7:0] → GPIO header J3 pins
+LOCATE COMP "uio_oe[0]" SITE "K3";
+LOCATE COMP "uio_oe[1]" SITE "J3";
+LOCATE COMP "uio_oe[2]" SITE "H3";
+LOCATE COMP "uio_oe[3]" SITE "G3";
+LOCATE COMP "uio_oe[4]" SITE "F3";
+LOCATE COMP "uio_oe[5]" SITE "E3";
+LOCATE COMP "uio_oe[6]" SITE "D3";
+LOCATE COMP "uio_oe[7]" SITE "C3";
+IOBUF  PORT "uio_oe[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[7]" IO_TYPE=LVCMOS33;

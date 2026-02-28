@@ -1,0 +1,20 @@
+[tasks]
+bmc
+
+[options]
+bmc: mode bmc
+bmc: depth 80
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog -sv seal_formal.sv
+read_verilog seal_register.v
+read_verilog crc16_engine.v
+prep -top seal_formal
+
+[files]
+seal_formal.sv
+../../src/seal_register.v
+../../src/crc16_engine.v

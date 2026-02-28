@@ -1,0 +1,65 @@
+# =============================================================================
+# Pin Constraints — Alchitry Cu V2 (iCE40HX8K-CB132)
+# LoRa Edge SoC FPGA verification
+# =============================================================================
+
+# ----- Clock & Reset (confirmed, Cu V1/V2 common) -----
+set_io clk_100m  P7     # 100MHz on-board oscillator
+set_io rst_n_btn P8     # Reset button (active low)
+
+# ----- On-board LEDs (active high, confirmed Cu V1/V2 common) -----
+set_io led[0]    J11
+set_io led[1]    K11
+set_io led[2]    K12
+set_io led[3]    K14
+set_io led[4]    L12
+set_io led[5]    L14
+set_io led[6]    M12
+set_io led[7]    N14
+
+# ----- On-board FTDI UART (confirmed Cu V1/V2 common) -----
+set_io usb_tx    M9     # FPGA TX -> FTDI RX -> USB host
+set_io usb_rx    P14    # FPGA RX <- FTDI TX <- USB host
+
+# =============================================================================
+# QSPI Flash + PSRAM (directly to breakout board)
+# TODO: Fill actual pin numbers after board arrives and schematic confirmed
+# Currently assigned to Bank A connector pins (PLACEHOLDER)
+# =============================================================================
+set_io flash_cs  A1     # PLACEHOLDER — Bank A
+set_io sd[0]     A2     # PLACEHOLDER — Bank A (SD0)
+set_io sd[1]     A3     # PLACEHOLDER — Bank A (SD1)
+set_io qspi_sck  A5     # PLACEHOLDER — Bank A (QSPI CLK)
+set_io sd[2]     A6     # PLACEHOLDER — Bank A (SD2)
+set_io sd[3]     A7     # PLACEHOLDER — Bank A (SD3)
+set_io ram_a_cs  A9     # PLACEHOLDER — Bank A (PSRAM A CS)
+set_io ram_b_cs  A10    # PLACEHOLDER — Bank A (PSRAM B CS)
+
+# =============================================================================
+# SX1268 LoRa Transceiver (directly to breakout board)
+# TODO: Fill actual pin numbers after board arrives
+# Currently assigned to Bank B connector pins (PLACEHOLDER)
+# =============================================================================
+set_io sx_dio1   B1     # PLACEHOLDER — Bank B (SX1268 DIO1/IRQ)
+set_io sx_busy   B2     # PLACEHOLDER — Bank B (SX1268 BUSY)
+set_io sx_reset  B3     # PLACEHOLDER — Bank B (SX1268 RESET)
+set_io sx_miso   B5     # PLACEHOLDER — Bank B (SPI MISO)
+set_io sx_mosi   B6     # PLACEHOLDER — Bank B (SPI MOSI)
+set_io sx_cs     B7     # PLACEHOLDER — Bank B (SPI CS)
+set_io sx_sck    B9     # PLACEHOLDER — Bank B (SPI SCK)
+
+# =============================================================================
+# I2C (directly to breakout board)
+# TODO: Fill actual pin numbers
+# =============================================================================
+set_io i2c_sda_i B10    # PLACEHOLDER — Bank B (SDA input)
+set_io i2c_sda_o B11    # PLACEHOLDER — Bank B (SDA output)
+set_io i2c_scl_o B12    # PLACEHOLDER — Bank B (SCL output)
+
+# =============================================================================
+# Misc Inputs
+# TODO: Fill actual pin numbers
+# =============================================================================
+set_io pps_in    B13    # PLACEHOLDER — 1PPS from GPS
+set_io gpio_in5  B14    # PLACEHOLDER — DIP switch / spare
+set_io gpio_in6  B15    # PLACEHOLDER — DIP switch / spare

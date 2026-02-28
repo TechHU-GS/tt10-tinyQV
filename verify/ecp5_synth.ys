@@ -1,0 +1,34 @@
+# ECP5 Synthesis Script for LoRa Edge SoC
+# Purpose: Validate RTL compatibility with ECP5 and estimate resource usage
+
+# Read all RTL sources
+read_verilog -DSIM ../src/project.v
+read_verilog ../src/crc16_engine.v
+read_verilog ../src/crc16_peripheral.v
+read_verilog ../src/i2c_master.v
+read_verilog ../src/i2c_peripheral.v
+read_verilog ../src/latch_mem.v
+read_verilog ../src/rtc_counter.v
+read_verilog ../src/seal_register.v
+read_verilog ../src/watchdog.v
+read_verilog ../src/tinyQV/cpu/alu.v
+read_verilog ../src/tinyQV/cpu/core.v
+read_verilog ../src/tinyQV/cpu/counter.v
+read_verilog ../src/tinyQV/cpu/cpu.v
+read_verilog ../src/tinyQV/cpu/decode.v
+read_verilog ../src/tinyQV/cpu/latch_reg.v
+read_verilog ../src/tinyQV/cpu/mem_ctrl.v
+read_verilog ../src/tinyQV/cpu/qspi_ctrl.v
+read_verilog ../src/tinyQV/cpu/qspi_flash.v
+read_verilog ../src/tinyQV/cpu/register.v
+read_verilog ../src/tinyQV/cpu/time.v
+read_verilog ../src/tinyQV/cpu/tinyqv.v
+read_verilog ../src/tinyQV/peri/uart/uart_rx.v
+read_verilog ../src/tinyQV/peri/uart/uart_tx.v
+read_verilog ../src/tinyQV/peri/spi/spi.v
+
+# Synthesize for ECP5
+synth_ecp5 -top tt_um_techhu_rv32_trial -json ecp5_netlist.json
+
+# Print statistics
+stat
